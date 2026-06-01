@@ -126,13 +126,15 @@ def process_data(data_rows):
         elif row.get('task') == 'response' and current_person:
             stimulus = row.get('stimulus', '')
             response = row.get('response', '')
+            reaction_time = row.get('reaction_time_ms', 'n/a')
             
             correct, result_str = check_answer(stimulus, response)
             results_by_person[current_person]['results'].append({
                 'stimulus': stimulus,
                 'response': response,
                 'result': result_str,
-                'is_correct': (correct == 'T')
+                'is_correct': (correct == 'T'),
+                'reaction_time_ms': reaction_time
             })
             
             if correct == 'T':
@@ -145,6 +147,7 @@ def process_data(data_rows):
 def export_results_to_csv(results_by_person, filename='results_analysis.csv'):
     """
     ส่งออกผลลัพธ์เป็น CSV
+    แสดงผลลัพธ์และ response time ในรูป: T(523ms), F(234ms), etc.
     """
     with open(filename, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
@@ -156,7 +159,7 @@ def export_results_to_csv(results_by_person, filename='results_analysis.csv'):
             'ระยะเรียน (เดือน)',
             'ระยะอยู่ (เดือน)',
             'ประสบการณ์',
-            'ผลลัพธ์',
+            'ผลลัพธ์ + Response Time',
             'ถูก',
             'ผิด',
             'ยินยอม',
@@ -180,8 +183,25 @@ def export_results_to_csv(results_by_person, filename='results_analysis.csv'):
                     note
                 ])
             else:
-                # รายการผลลัพธ์
-                results_str = ' '.join([r['result'] for r in data['results']])
+                # รายการผลลัพธ์กับ response time
+                results_with_rt = []
+                for r in data['results']:
+                    result_text = r['result']
+                    rt = r.get('reaction_time_ms', 'n/a')
+                    
+                    # แสดงเป็น T(523ms) หรือ F(234ms)
+                    if rt != 'n/a':
+                        try:
+                            rt_value = int(float(rt))
+                            combined = f"{result_text}({rt_value}ms)"
+                        except:
+                            combined = f"{result_text}(n/a)"
+                    else:
+                        combined = f"{result_text}(n/a)"
+                    
+                    results_with_rt.append(combined)
+                
+                results_str = ' '.join(results_with_rt)
                 
                 writer.writerow([
                     data['respondent_id'],
@@ -294,7 +314,7 @@ def export_statistical_analysis_to_csv(results_by_person, filename='statistical_
 
 def export_results_to_json(results_by_person, filename='results_analysis.json'):
     """
-    ส่งออกผลลัพธ์เป็น JSON
+    ส่งออกผลลัพธ์เป็น JSON พร้อมกับ response time
     """
     export_data = {}
     for person_id, data in results_by_person.items():
@@ -305,7 +325,12 @@ def export_results_to_json(results_by_person, filename='results_analysis.json'):
             'stay_duration_months': data['stay_duration'],
             'pron_experience': data['pron_experience'],
             'consent': data['consent'],
-            'results': [r['result'] for r in data['results']],
+            'results': [
+                {
+                    'result': r['result'],
+                    'reaction_time_ms': r.get('reaction_time_ms', 'n/a')
+                } for r in data['results']
+            ],
             'statistics': {
                 'correct': data['correct_count'],
                 'incorrect': data['incorrect_count'],
@@ -347,19 +372,32 @@ def print_summary(results_by_person):
         print(f"  ความถูกต้อง: {accuracy:.1f}%")
     
     print("\nรายละเอียดผู้เข้าร่วมแต่ละคน:")
-    print("-"*100)
-    print(f"{'ID':<6} {'Email':<20} {'ระยะเรียน':<12} {'ระยะอยู่':<12} {'ประสบการณ์':<12} {'ถูก':<6} {'ผิด':<6} {'%':<8}")
-    print("-"*100)
+    print("-"*120)
+    print(f"{'ID':<6} {'Email':<20} {'ระยะเรียน':<12} {'ระยะอยู่':<12} {'ประสบการณ์':<12} {'ถูก':<6} {'ผิด':<6} {'%':<8} {'เฉลี่ย RT':<12}")
+    print("-"*120)
     
     for person_id, data in sorted(results_by_person.items()):
         if data['consent'].lower() != 'true':
-            print(f"{data['respondent_id']:<6} {data['email']:<20} {'N/A':<12} {'N/A':<12} {'N/A':<12} {'[ไม่รวม]':<44}")
+            print(f"{data['respondent_id']:<6} {data['email']:<20} {'N/A':<12} {'N/A':<12} {'N/A':<12} {'[ไม่รวม]':<52}")
         else:
             total = len(data['results'])
             pct = (data['correct_count'] / total * 100) if total > 0 else 0
-            print(f"{data['respondent_id']:<6} {data['email']:<20} {str(data['study_duration']):<12} {str(data['stay_duration']):<12} {str(data['pron_experience']):<12} {str(data['correct_count']):<6} {str(data['incorrect_count']):<6} {f'{pct:.1f}%':<8}")
+            
+            # คำนวณ average reaction time
+            reaction_times = []
+            for r in data['results']:
+                rt = r.get('reaction_time_ms', None)
+                if rt and rt != 'n/a':
+                    try:
+                        reaction_times.append(float(rt))
+                    except:
+                        pass
+            
+            avg_rt = f"{sum(reaction_times) / len(reaction_times):.0f}ms" if reaction_times else "n/a"
+            
+            print(f"{data['respondent_id']:<6} {data['email']:<20} {str(data['study_duration']):<12} {str(data['stay_duration']):<12} {str(data['pron_experience']):<12} {str(data['correct_count']):<6} {str(data['incorrect_count']):<6} {f'{pct:.1f}%':<8} {avg_rt:<12}")
     
-    print("="*100 + "\n")
+    print("="*120 + "\n")
 
 # ================= Main =================
 if __name__ == '__main__':

@@ -16,7 +16,7 @@ function doPost(e) {
     // เปิด Google Sheet
     const spreadsheet = SpreadsheetApp.openById(sheetId);
     
-    // 1. เพิ่มข้อมูลไปยัง "raw" sheet (หรือสร้างใหม่ถ้ายังไม่มี)
+    // 1. เพิ่มข้อมูลไปยัง "raw" sheet เท่านั้น
     let rawSheet = spreadsheet.getSheetByName('raw');
     if (!rawSheet) {
       rawSheet = spreadsheet.addSheet('raw');
@@ -24,9 +24,24 @@ function doPost(e) {
     
     // เพิ่มแถว header ถ้ายังไม่มี
     if (rawSheet.getLastRow() === 0) {
-      const headers = ['respondent_id', 'stimulus', 'response', 'correct_response', 'is_correct', 'reaction_time_ms'];
+      const headers = [
+        'respondent_id', 
+        'stimulus', 
+        'response', 
+        'correct_response', 
+        'is_correct', 
+        'reaction_time_ms',
+        'study_duration_months',
+        'stay_duration_months',
+        'pron_experience'
+      ];
       rawSheet.appendRow(headers);
     }
+    
+    // คำนวณระยะเวลา
+    const studyDuration = convertYearMonth(summaryData.study_year, summaryData.study_month);
+    const stayDuration = convertYearMonth(summaryData.stay_year, summaryData.stay_month);
+    const pronExp = summaryData.pron_experience || '';
     
     // เพิ่มข้อมูลรายละเอียด
     detailedData.forEach(row => {
@@ -36,34 +51,18 @@ function doPost(e) {
         row.response,
         row.correct_response,
         row.is_correct,
-        row.reaction_time_ms
+        row.reaction_time_ms,
+        studyDuration,
+        stayDuration,
+        pronExp
       ]);
     });
     
-    // 2. เพิ่มข้อมูล summary
-    let summarySheet = spreadsheet.getSheetByName('summary');
-    if (!summarySheet) {
-      summarySheet = spreadsheet.addSheet('summary');
-    }
+    // 2. สร้าง sheet สำหรับการวิเคราะห์สถิติ
+    createStatisticalAnalysisSheet(spreadsheet, rawSheet);
     
-    if (summarySheet.getLastRow() === 0) {
-      const summaryHeaders = ['respondent_id', 'study_duration_months', 'stay_duration_months', 'pron_experience', 'tan_on_correct', 'yo_on_correct', 'total_correct'];
-      summarySheet.appendRow(summaryHeaders);
-    }
-    
-    const totalCorrect = (summaryData.tan_on_correct || 0) + (summaryData.yo_on_correct || 0);
-    summarySheet.appendRow([
-      respondentId,
-      summaryData.study_year * 12 + convertMonth(summaryData.study_month),
-      summaryData.stay_year * 12 + convertMonth(summaryData.stay_month),
-      summaryData.pron_experience || '',
-      summaryData.tan_on_correct || 0,
-      summaryData.yo_on_correct || 0,
-      totalCorrect
-    ]);
-    
-    // 3. สร้าง sheet สำหรับการวิเคราะห์สถิติ
-    createStatisticalAnalysisSheet(spreadsheet, sheetId);
+    // 3. ลบ sheet ที่ไม่ต้องใช้ (ถ้ามี)
+    deleteUnusedSheets(spreadsheet);
     
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
@@ -80,152 +79,200 @@ function doPost(e) {
 }
 
 /**
- * แปลงเดือนจากข้อมูล survey
+ * แปลง Year/Month เป็นจำนวนเดือนทั้งหมด
  */
-function convertMonth(monthValue) {
-  if (!monthValue || monthValue === '') return 0;
-  
+function convertYearMonth(year, month) {
   try {
-    const m = parseInt(monthValue);
-    if (monthValue.includes('uncertain_0_6') || monthValue === 'uncertain_0_6') return 3;
-    if (monthValue.includes('uncertain_6_12') || monthValue === 'uncertain_6_12') return 9;
-    if (m >= 1 && m <= 6) return 3;
-    if (m >= 7 && m <= 12) return 9;
-    return m;
+    const y = parseInt(year) || 0;
+    let m = 0;
+    
+    if (typeof month === 'string') {
+      if (month.includes('uncertain_0_6')) m = 3;
+      else if (month.includes('uncertain_6_12')) m = 9;
+      else m = parseInt(month) || 0;
+    } else {
+      m = parseInt(month) || 0;
+    }
+    
+    if (m >= 1 && m <= 6) m = 3;
+    else if (m >= 7 && m <= 12) m = 9;
+    
+    return y * 12 + m;
   } catch {
     return 0;
   }
 }
 
 /**
+ * ลบ sheet ที่ไม่ต้องใช้
+ */
+function deleteUnusedSheets(spreadsheet) {
+  const sheetsToDelete = ['summary', 'per_stimulus', 'Sheet1'];
+  const sheets = spreadsheet.getSheets();
+  
+  sheets.forEach(sheet => {
+    if (sheetsToDelete.includes(sheet.getName()) && spreadsheet.getSheets().length > 2) {
+      spreadsheet.deleteSheet(sheet);
+    }
+  });
+}
+
+/**
  * สร้าง sheet สำหรับการวิเคราะห์สถิติ GLMM และ t-test
  */
-function createStatisticalAnalysisSheet(spreadsheet, sheetId) {
-  let statsSheet = spreadsheet.getSheetByName('statistical_analysis');
+function createStatisticalAnalysisSheet(spreadsheet, rawSheet) {
+  let analysisSheet = spreadsheet.getSheetByName('analysis');
   
-  if (!statsSheet) {
-    statsSheet = spreadsheet.addSheet('statistical_analysis');
+  if (!analysisSheet) {
+    analysisSheet = spreadsheet.addSheet('analysis');
   } else {
-    // ล้างข้อมูลเก่า
-    statsSheet.clearContents();
+    analysisSheet.clearContents();
   }
   
-  const sheet = statsSheet;
+  const sheet = analysisSheet;
   let row = 1;
   
-  // ส่วนที่ 1: GLMM Analysis
-  sheet.getRange(row, 1).setValue('=== GLMM Analysis (Duration Effects) ===');
-  sheet.getRange(row, 1).setFontWeight('bold');
+  // ส่วนที่ 1: GLMM Analysis (Regression Model)
+  sheet.getRange(row, 1).setValue('GLMM Analysis (Study/Stay Duration Effects on Accuracy)');
+  sheet.getRange(row, 1).setFontWeight('bold').setFontSize(12).setBackground('#4285F4').setFontColor('white');
   row++;
   
-  sheet.getRange(row, 1).setValue('Variable');
+  // Descriptive Statistics
+  row++;
+  sheet.getRange(row, 1).setValue('Factor');
   sheet.getRange(row, 2).setValue('Mean');
   sheet.getRange(row, 3).setValue('SD');
   sheet.getRange(row, 4).setValue('Min');
   sheet.getRange(row, 5).setValue('Max');
-  sheet.getRange(row, 1, 1, 5).setFontWeight('bold').setBackground('#E8E8E8');
+  sheet.getRange(row, 6).setValue('N');
+  sheet.getRange(row, 1, 1, 6).setFontWeight('bold').setBackground('#E8E8E8');
   row++;
   
-  // Study Duration Statistics
+  // Study Duration
   sheet.getRange(row, 1).setValue('Study Duration (months)');
-  sheet.getRange(row, 2).setFormula('=AVERAGEIF(summary!D:D,"<>",summary!B:B)');
-  sheet.getRange(row, 3).setFormula('=STDEV(summary!B:B)');
-  sheet.getRange(row, 4).setFormula('=MIN(summary!B:B)');
-  sheet.getRange(row, 5).setFormula('=MAX(summary!B:B)');
+  sheet.getRange(row, 2).setFormula('=IFERROR(AVERAGE(raw!G:G),0)');
+  sheet.getRange(row, 3).setFormula('=IFERROR(STDEV(raw!G:G),0)');
+  sheet.getRange(row, 4).setFormula('=IFERROR(MIN(raw!G:G),0)');
+  sheet.getRange(row, 5).setFormula('=IFERROR(MAX(raw!G:G),0)');
+  sheet.getRange(row, 6).setFormula('=COUNTA(raw!G:G)-1');
   row++;
   
-  // Stay Duration Statistics
+  // Stay Duration
   sheet.getRange(row, 1).setValue('Stay Duration (months)');
-  sheet.getRange(row, 2).setFormula('=AVERAGE(summary!C:C)');
-  sheet.getRange(row, 3).setFormula('=STDEV(summary!C:C)');
-  sheet.getRange(row, 4).setFormula('=MIN(summary!C:C)');
-  sheet.getRange(row, 5).setFormula('=MAX(summary!C:C)');
+  sheet.getRange(row, 2).setFormula('=IFERROR(AVERAGE(raw!H:H),0)');
+  sheet.getRange(row, 3).setFormula('=IFERROR(STDEV(raw!H:H),0)');
+  sheet.getRange(row, 4).setFormula('=IFERROR(MIN(raw!H:H),0)');
+  sheet.getRange(row, 5).setFormula('=IFERROR(MAX(raw!H:H),0)');
+  sheet.getRange(row, 6).setFormula('=COUNTA(raw!H:H)-1');
   row++;
   
-  // Accuracy Statistics
+  // Accuracy (%)
   sheet.getRange(row, 1).setValue('Accuracy (%)');
-  sheet.getRange(row, 2).setFormula('=AVERAGE(summary!F:F)');
-  sheet.getRange(row, 3).setFormula('=STDEV(summary!F:F)');
-  sheet.getRange(row, 4).setFormula('=MIN(summary!F:F)');
-  sheet.getRange(row, 5).setFormula('=MAX(summary!F:F)');
+  sheet.getRange(row, 2).setFormula('=IFERROR(AVERAGE(IF(raw!E:E="TRUE",1,0))*100,0)');
+  sheet.getRange(row, 3).setFormula('=IFERROR(STDEV(IF(raw!E:E="TRUE",1,0))*100,0)');
+  sheet.getRange(row, 4).setFormula('=0');
+  sheet.getRange(row, 5).setFormula('=100');
+  sheet.getRange(row, 6).setFormula('=COUNTA(raw!E:E)-1');
   row += 2;
   
   // Correlation Analysis
-  sheet.getRange(row, 1).setValue('Correlation Analysis');
-  sheet.getRange(row, 1).setFontWeight('bold');
+  sheet.getRange(row, 1).setValue('Correlation Matrix (Pearson r)');
+  sheet.getRange(row, 1).setFontWeight('bold').setBackground('#34A853').setFontColor('white');
   row++;
   
-  sheet.getRange(row, 1).setValue('Relationship');
-  sheet.getRange(row, 2).setValue('Correlation (r)');
+  sheet.getRange(row, 1).setValue('Comparison');
+  sheet.getRange(row, 2).setValue('r');
   sheet.getRange(row, 3).setValue('p-value');
-  sheet.getRange(row, 1, 1, 3).setFontWeight('bold').setBackground('#E8E8E8');
+  sheet.getRange(row, 4).setValue('Significance');
+  sheet.getRange(row, 1, 1, 4).setFontWeight('bold').setBackground('#E8E8E8');
   row++;
   
-  // Study Duration vs Accuracy
+  // Study Duration vs Accuracy (GLMM)
+  const studyAccRow = row;
   sheet.getRange(row, 1).setValue('Study Duration ↔ Accuracy');
-  sheet.getRange(row, 2).setFormula('=CORREL(summary!B:B,summary!F:F)');
-  // p-value จำนวนประมาณ (ใช้ PEARSON distribution)
-  sheet.getRange(row, 3).setFormula('=(1-NORM.S.DIST(ABS(B' + row + ')*SQRT(COUNTA(summary!B:B)-2)/SQRT(1-B' + row + '^2),TRUE))*2');
+  sheet.getRange(row, 2).setFormula('=IFERROR(CORREL(raw!G:G,IF(raw!E:E="TRUE",1,0)),0)');
+  sheet.getRange(row, 3).setFormula('=IFERROR(IF(COUNTA(raw!G:G)>2,TTEST(raw!G:G,IF(raw!E:E="TRUE",1,0),2,2),0),0)');
+  sheet.getRange(row, 4).setFormula('=IF(C' + row + '<0.001,"***",IF(C' + row + '<0.01,"**",IF(C' + row + '<0.05,"*","n.s.")))');
   row++;
   
-  // Stay Duration vs Accuracy
+  // Stay Duration vs Accuracy (GLMM)
+  const stayAccRow = row;
   sheet.getRange(row, 1).setValue('Stay Duration ↔ Accuracy');
-  sheet.getRange(row, 2).setFormula('=CORREL(summary!C:C,summary!F:F)');
-  sheet.getRange(row, 3).setFormula('=(1-NORM.S.DIST(ABS(B' + row + ')*SQRT(COUNTA(summary!C:C)-2)/SQRT(1-B' + row + '^2),TRUE))*2');
+  sheet.getRange(row, 2).setFormula('=IFERROR(CORREL(raw!H:H,IF(raw!E:E="TRUE",1,0)),0)');
+  sheet.getRange(row, 3).setFormula('=IFERROR(IF(COUNTA(raw!H:H)>2,TTEST(raw!H:H,IF(raw!E:E="TRUE",1,0),2,2),0),0)');
+  sheet.getRange(row, 4).setFormula('=IF(C' + row + '<0.001,"***",IF(C' + row + '<0.01,"**",IF(C' + row + '<0.05,"*","n.s.")))');
   row += 2;
   
   // ส่วนที่ 2: Independent t-test for Pronunciation Experience
-  sheet.getRange(row, 1).setValue('=== Independent t-test (Pronunciation Experience) ===');
-  sheet.getRange(row, 1).setFontWeight('bold');
+  sheet.getRange(row, 1).setValue('Independent t-test (Pronunciation Experience)');
+  sheet.getRange(row, 1).setFontWeight('bold').setFontSize(12).setBackground('#EA4335').setFontColor('white');
   row++;
   
+  row++;
   sheet.getRange(row, 1).setValue('Group');
   sheet.getRange(row, 2).setValue('N');
-  sheet.getRange(row, 3).setValue('Mean');
+  sheet.getRange(row, 3).setValue('Mean (%)');
   sheet.getRange(row, 4).setValue('SD');
   sheet.getRange(row, 1, 1, 4).setFontWeight('bold').setBackground('#E8E8E8');
   row++;
   
-  // With Experience (มี)
+  // With Experience
+  const withExpRow = row;
   sheet.getRange(row, 1).setValue('With Experience (มี)');
-  sheet.getRange(row, 2).setFormula('=COUNTIF(summary!D:D,"มี")');
-  sheet.getRange(row, 3).setFormula('=AVERAGEIF(summary!D:D,"มี",summary!F:F)');
-  sheet.getRange(row, 4).setFormula('=STDEV(IF(summary!D:D="มี",summary!F:F))');
+  sheet.getRange(row, 2).setFormula('=COUNTIF(raw!I:I,"มี")');
+  sheet.getRange(row, 3).setFormula('=IFERROR(AVERAGEIFS(IF(raw!E:E="TRUE",1,0),raw!I:I,"มี")*100,0)');
+  sheet.getRange(row, 4).setFormula('=IFERROR(STDEV(IF((raw!I:I="มี")*(raw!E:E="TRUE"),1,0))*100,0)');
   row++;
   
-  // Without Experience (ไม่มี)
+  // Without Experience
+  const withoutExpRow = row;
   sheet.getRange(row, 1).setValue('Without Experience (ไม่มี)');
-  sheet.getRange(row, 2).setFormula('=COUNTIF(summary!D:D,"ไม่มี")');
-  sheet.getRange(row, 3).setFormula('=AVERAGEIF(summary!D:D,"ไม่มี",summary!F:F)');
-  sheet.getRange(row, 4).setFormula('=STDEV(IF(summary!D:D="ไม่มี",summary!F:F))');
+  sheet.getRange(row, 2).setFormula('=COUNTIF(raw!I:I,"ไม่มี")');
+  sheet.getRange(row, 3).setFormula('=IFERROR(AVERAGEIFS(IF(raw!E:E="TRUE",1,0),raw!I:I,"ไม่มี")*100,0)');
+  sheet.getRange(row, 4).setFormula('=IFERROR(STDEV(IF((raw!I:I="ไม่มี")*(raw!E:E="TRUE"),1,0))*100,0)');
   row += 2;
   
   // t-test Results
   sheet.getRange(row, 1).setValue('t-test Results');
-  sheet.getRange(row, 1).setFontWeight('bold');
+  sheet.getRange(row, 1).setFontWeight('bold').setBackground('#FBBC04').setFontColor('black');
   row++;
   
-  sheet.getRange(row, 1).setValue('t-statistic');
-  sheet.getRange(row, 2).setFormula('=(C' + (row - 3) + '-C' + (row - 2) + ')/SQRT((D' + (row - 3) + '^2/(B' + (row - 3) + '-1)+D' + (row - 2) + '^2/(B' + (row - 2) + '-1))/(1/B' + (row - 3) + '+1/B' + (row - 2) + '))');
+  sheet.getRange(row, 1).setValue('Statistic');
+  sheet.getRange(row, 2).setValue('Value');
+  sheet.getRange(row, 1, 1, 2).setFontWeight('bold').setBackground('#E8E8E8');
+  row++;
+  
+  sheet.getRange(row, 1).setValue('t-value');
+  sheet.getRange(row, 2).setFormula('=IFERROR((C' + withExpRow + '-C' + withoutExpRow + ')/SQRT(D' + withExpRow + '^2/B' + withExpRow + '+D' + withoutExpRow + '^2/B' + withoutExpRow + '),0)');
+  row++;
+  
+  sheet.getRange(row, 1).setValue('df (degrees of freedom)');
+  sheet.getRange(row, 2).setFormula('=B' + withExpRow + '+B' + withoutExpRow + '-2');
   row++;
   
   sheet.getRange(row, 1).setValue('p-value (two-tailed)');
-  sheet.getRange(row, 2).setFormula('=2*(1-T.DIST(ABS(B' + (row - 1) + '),B' + (row - 4) + '+B' + (row - 3) + '-2,TRUE))');
+  sheet.getRange(row, 2).setFormula('=IFERROR(TTEST(IF(raw!I:I="มี",IF(raw!E:E="TRUE",1,0)),IF(raw!I:I="ไม่มี",IF(raw!E:E="TRUE",1,0)),2,2),1)');
   row++;
   
-  sheet.getRange(row, 1).setValue('Mean Difference');
-  sheet.getRange(row, 2).setFormula('=C' + (row - 4) + '-C' + (row - 3));
+  sheet.getRange(row, 1).setValue('Mean Difference (%)');
+  sheet.getRange(row, 2).setFormula('=C' + withExpRow + '-C' + withoutExpRow);
   row++;
   
   sheet.getRange(row, 1).setValue('Effect Size (Cohen\'s d)');
-  sheet.getRange(row, 2).setFormula('=B' + (row - 2) + '/SQRT(((B' + (row - 5) + '-1)*D' + (row - 5) + '^2+(B' + (row - 4) + '-1)*D' + (row - 4) + '^2)/(B' + (row - 5) + '+B' + (row - 4) + '-2))');
+  sheet.getRange(row, 2).setFormula('=IFERROR((C' + withExpRow + '-C' + withoutExpRow + ')/SQRT(((B' + withExpRow + '-1)*D' + withExpRow + '^2+(B' + withoutExpRow + '-1)*D' + withoutExpRow + '^2)/(B' + withExpRow + '+B' + withoutExpRow + '-2)),0)');
+  row++;
+  
+  sheet.getRange(row, 1).setValue('Significance');
+  const pvalueRow = row - 2;
+  sheet.getRange(row, 2).setFormula('=IF(B' + pvalueRow + '<0.001,"***",IF(B' + pvalueRow + '<0.01,"**",IF(B' + pvalueRow + '<0.05,"*","n.s.")))');
   
   // กำหนดความกว้างของคอลัมน์
-  sheet.setColumnWidth(1, 250);
-  sheet.setColumnWidth(2, 150);
-  sheet.setColumnWidth(3, 150);
-  sheet.setColumnWidth(4, 150);
-  sheet.setColumnWidth(5, 150);
+  sheet.setColumnWidth(1, 280);
+  sheet.setColumnWidth(2, 120);
+  sheet.setColumnWidth(3, 120);
+  sheet.setColumnWidth(4, 120);
+  sheet.setColumnWidth(5, 120);
+  sheet.setColumnWidth(6, 80);
 }
 
 /**
@@ -234,3 +281,4 @@ function createStatisticalAnalysisSheet(spreadsheet, sheetId) {
 function testConnection() {
   Logger.log('Google Apps Script is running correctly');
 }
+
