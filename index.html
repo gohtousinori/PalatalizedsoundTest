@@ -44,6 +44,23 @@
       const stayYear = preFormData.stay_year || 'n/a';
       const stayMonth = preFormData.stay_month || 'n/a';
       const email = preFormData.email || 'n/a';
+      
+      // ===================== ดึงข้อมูลประสบการณ์การเรียน =====================
+      const preChoiceData = allData.find(r => r.task === 'pre_survey_choice') || {};
+      let pronExperience = '';
+      if (preChoiceData.response) {
+        let resp = preChoiceData.response;
+        if (typeof resp === 'string') {
+          try { resp = JSON.parse(resp); } catch(e) {}
+        }
+        if (Array.isArray(resp)) {
+          pronExperience = resp[0] || '';
+        } else if (resp && typeof resp === 'object') {
+          pronExperience = Object.values(resp)[0] || '';
+        } else {
+          pronExperience = resp;
+        }
+      }
 
       // ===================== นับจำนวนคนที่ตอบ (Respondent ID) =====================
       // ใช้ timestamp เพื่อสร้าง unique ID เล็กน้อย
@@ -62,6 +79,7 @@
         study_month: studyMonth,
         stay_year: stayYear,
         stay_month: stayMonth,
+        pron_experience: pronExperience,
         tan_on_correct: tanOnCorrect,
         yo_on_correct: yoOnCorrect
       };
@@ -312,7 +330,7 @@ ${detailedRows.map((row, idx) => {
     type: jsPsychSurveyText,
     questions: [
       {
-        prompt: '日本語の体系的な発音学習（授業／科目等）を受講したことはありますか。受講機関があればご記入ください（任意）',
+        prompt: 'ท่านเคยเรียนการออกเสียงภาษาญี่ปุ่นในสถาบันใด ๆ หรือไม่ (ถ้ามี โปรดระบุชื่อสถาบัน)<br>日本語の体系的な発音学習（授業／科目等）を受講したことはありますか。受講機関があればご記入ください（任意）',
         name: 'institution',
         placeholder: '受講した場合は機関名を入力',
         required: false
@@ -377,50 +395,50 @@ ${detailedRows.map((row, idx) => {
   // 3. แต่ละไฟล์ต้องตั้งชื่อตามตัวอักษร (stimulus) เช่น: し.mp3, ち.mp3, ひ.mp3 เป็นต้น
   // 4. แล้วแทนที่ audioPlaceholder (ด้านล่าง) ด้วย audioPlayer trial (ดูเพิ่มเติมด้านล่าง)
   const trials = [
-    { stimulus: 'し', choices: ['し', 'ち', 'ひ', 'き', '他'], correct_response: 'し' },
-    { stimulus: 'ち', choices: ['ち', 'し', 'じ', 'き', '他'], correct_response: 'ち' },
-    { stimulus: 'ひ', choices: ['ひ', 'し', 'き', 'ち', '他'], correct_response: 'ひ' },
-    { stimulus: 'に', choices: ['に', 'ぎ', 'り', 'み', '他'], correct_response: 'に' },
-    { stimulus: 'ぎ', choices: ['ぎ', 'に', 'き', 'じ', '他'], correct_response: 'ぎ' },
-    { stimulus: 'じ', choices: ['じ', 'ち', 'し', 'ぎ', '他'], correct_response: 'じ' },
-    { stimulus: 'き', choices: ['き', 'ぎ', 'ち', 'し', '他'], correct_response: 'き' },
-    { stimulus: 'り', choices: ['り', 'に', 'じ', 'ぎ', '他'], correct_response: 'り' },
-    { stimulus: 'み', choices: ['み', 'び', 'に', 'ぴ', '他'], correct_response: 'み' },
-    { stimulus: 'び', choices: ['び', 'ぴ', 'み', 'じ', '他'], correct_response: 'び' },
-    { stimulus: 'ぴ', choices: ['ぴ', 'び', 'み', 'ひ', '他'], correct_response: 'ぴ' },
-    { stimulus: 'きゃ', choices: ['きゃ', 'しゃ', 'ちゃ', 'か', '他'], correct_response: 'きゃ' },
-    { stimulus: 'きゅ', choices: ['きゅ', 'ひゅ', 'ちゅ', 'く', '他'], correct_response: 'きゅ' },
-    { stimulus: 'きょ', choices: ['きょ', 'ひょ', 'ちょ', 'こ', '他'], correct_response: 'きょ' },
-    { stimulus: 'ぎゃ', choices: ['ぎゃ', 'じゃ', 'にゃ', 'が', '他'], correct_response: 'ぎゃ' },
-    { stimulus: 'ぎゅ', choices: ['ぎゅ', 'じゅ', 'にゅ', 'ぐ', '他'], correct_response: 'ぎゅ' },
-    { stimulus: 'ぎょ', choices: ['ぎょ', 'じょ', 'にょ', 'ご', '他'], correct_response: 'ぎょ' },
-    { stimulus: 'しゃ', choices: ['しゃ', 'ちゃ', 'ひゃ', 'さ', '他'], correct_response: 'しゃ' },
-    { stimulus: 'しゅ', choices: ['しゅ', 'ちゅ', 'ひゅ', 'す', '他'], correct_response: 'しゅ' },
-    { stimulus: 'しょ', choices: ['しょ', 'ちょ', 'ひょ', 'そ', '他'], correct_response: 'しょ' },
-    { stimulus: 'じゃ', choices: ['じゃ', 'ちゃ', 'しゃ', 'だ', '他'], correct_response: 'じゃ' },
-    { stimulus: 'じゅ', choices: ['じゅ', 'ちゅ', 'しゅ', 'づ', '他'], correct_response: 'じゅ' },
-    { stimulus: 'じょ', choices: ['じょ', 'ちょ', 'しょ', 'ど', '他'], correct_response: 'じょ' },
-    { stimulus: 'ちゃ', choices: ['ちゃ', 'しゃ', 'じゃ', 'た', '他'], correct_response: 'ちゃ' },
-    { stimulus: 'ちゅ', choices: ['ちゅ', 'しゅ', 'じゅ', 'つ', '他'], correct_response: 'ちゅ' },
-    { stimulus: 'ちょ', choices: ['ちょ', 'しょ', 'じょ', 'と', '他'], correct_response: 'ちょ' },
-    { stimulus: 'にゃ', choices: ['にゃ', 'ぎゃ', 'りゃ', 'な', '他'], correct_response: 'にゃ' },
-    { stimulus: 'にゅ', choices: ['にゅ', 'ぎゅ', 'りゅ', 'ぬ', '他'], correct_response: 'にゅ' },
-    { stimulus: 'にょ', choices: ['にょ', 'ぎょ', 'りょ', 'の', '他'], correct_response: 'にょ' },
-    { stimulus: 'ひゃ', choices: ['ひゃ', 'しゃ', 'きゃ', 'は', '他'], correct_response: 'ひゃ' },
-    { stimulus: 'ひゅ', choices: ['ひゅ', 'しゅ', 'きゅ', 'ふ', '他'], correct_response: 'ひゅ' },
-    { stimulus: 'ひょ', choices: ['ひょ', 'しょ', 'きょ', 'ほ', '他'], correct_response: 'ひょ' },
-    { stimulus: 'ぴゃ', choices: ['ぴゃ', 'びゃ', 'みゃ', 'ぱ', '他'], correct_response: 'ぴゃ' },
-    { stimulus: 'ぴゅ', choices: ['ぴゅ', 'びゅ', 'みゅ', 'ぷ', '他'], correct_response: 'ぴゅ' },
-    { stimulus: 'ぴょ', choices: ['ぴょ', 'びょ', 'みょ', 'ぽ', '他'], correct_response: 'ぴょ' },
-    { stimulus: 'びゃ', choices: ['びゃ', 'ぴゃ', 'みゃ', 'ば', '他'], correct_response: 'びゃ' },
-    { stimulus: 'びゅ', choices: ['びゅ', 'ぴゅ', 'みゅ', 'ぶ', '他'], correct_response: 'びゅ' },
-    { stimulus: 'びょ', choices: ['びょ', 'ぴょ', 'みょ', 'ぼ', '他'], correct_response: 'びょ' },
-    { stimulus: 'みゃ', choices: ['みゃ', 'びゃ', 'にゃ', 'ま', '他'], correct_response: 'みゃ' },
-    { stimulus: 'みゅ', choices: ['みゅ', 'びゅ', 'にゅ', 'む', '他'], correct_response: 'みゅ' },
-    { stimulus: 'みょ', choices: ['みょ', 'びょ', 'にょ', 'も', '他'], correct_response: 'みょ' },
-    { stimulus: 'りゃ', choices: ['りゃ', 'にゃ', 'だ', 'ら', '他'], correct_response: 'りゃ' },
-    { stimulus: 'りゅ', choices: ['りゅ', 'にゅ', 'じゅ', 'る', '他'], correct_response: 'りゅ' },
-    { stimulus: 'りょ', choices: ['りょ', 'にょ', 'ど', 'ろ', '他'], correct_response: 'りょ' }
+    { stimulus: 'し', choices: ['し (shi)', 'ち (chi)', 'ひ (hi)', 'き (ki)', '他(other)'], correct_response: 'し (shi)' },
+    { stimulus: 'ち', choices: ['ち (chi)', 'し (shi)', 'じ (ji)', 'き (ki)', '他(other)'], correct_response: 'ち (chi)' },
+    { stimulus: 'ひ', choices: ['ひ (hi)', 'し (shi)', 'き (ki)', 'ち (chi)', '他(other)'], correct_response: 'ひ (hi)' },
+    { stimulus: 'に', choices: ['に (ni)', 'ぎ (gi)', 'り (ri)', 'み (mi)', '他(other)'], correct_response: 'に (ni)' },
+    { stimulus: 'ぎ', choices: ['ぎ (gi)', 'に (ni)', 'き (ki)', 'じ (ji)', '他(other)'], correct_response: 'ぎ (gi)' },
+    { stimulus: 'じ', choices: ['じ (ji)', 'ち (chi)', 'し (shi)', 'ぎ (gi)', '他(other)'], correct_response: 'じ (ji)' },
+    { stimulus: 'き', choices: ['き (ki)', 'ぎ (gi)', 'ち (chi)', 'し (shi)', '他(other)'], correct_response: 'き (ki)' },
+    { stimulus: 'り', choices: ['り (ri)', 'に (ni)', 'じ (ji)', 'ぎ (gi)', '他(other)'], correct_response: 'り (ri)' },
+    { stimulus: 'み', choices: ['み (mi)', 'び (bi)', 'に (ni)', 'ぴ (pi)', '他(other)'], correct_response: 'み (mi)' },
+    { stimulus: 'び', choices: ['び (bi)', 'ぴ (pi)', 'み (mi)', 'じ (ji)', '他(other)'], correct_response: 'び (bi)' },
+    { stimulus: 'ぴ', choices: ['ぴ (pi)', 'び (bi)', 'み (mi)', 'ひ (hi)', '他(other)'], correct_response: 'ぴ (pi)' },
+    { stimulus: 'きゃ', choices: ['きゃ (kya)', 'しゃ (sha)', 'ちゃ (cha)', 'か (ka)', '他(other)'], correct_response: 'きゃ (kya)' },
+    { stimulus: 'きゅ', choices: ['きゅ (kyu)', 'ひゅ (hyu)', 'ちゅ (chu)', 'く (ku)', '他(other)'], correct_response: 'きゅ (kyu)' },
+    { stimulus: 'きょ', choices: ['きょ (kyo)', 'ひょ (hyo)', 'ちょ (cho)', 'こ (ko)', '他(other)'], correct_response: 'きょ (kyo)' },
+    { stimulus: 'ぎゃ', choices: ['ぎゃ (gya)', 'じゃ (ja)', 'にゃ (nya)', 'が (ga)', '他(other)'], correct_response: 'ぎゃ (gya)' },
+    { stimulus: 'ぎゅ', choices: ['ぎゅ (gyu)', 'じゅ (ju)', 'にゅ (nyu)', 'ぐ (gu)', '他(other)'], correct_response: 'ぎゅ (gyu)' },
+    { stimulus: 'ぎょ', choices: ['ぎょ (gyo)', 'じょ (jo)', 'にょ (nyo)', 'ご (go)', '他(other)'], correct_response: 'ぎょ (gyo)' },
+    { stimulus: 'しゃ', choices: ['しゃ (sha)', 'ちゃ (cha)', 'ひゃ (hya)', 'さ (sa)', '他(other)'], correct_response: 'しゃ (sha)' },
+    { stimulus: 'しゅ', choices: ['しゅ (shu)', 'ちゅ (chu)', 'ひゅ (hyu)', 'す (su)', '他(other)'], correct_response: 'しゅ (shu)' },
+    { stimulus: 'しょ', choices: ['しょ (sho)', 'ちょ (cho)', 'ひょ (hyo)', 'そ (so)', '他(other)'], correct_response: 'しょ (sho)' },
+    { stimulus: 'じゃ', choices: ['じゃ (ja)', 'ちゃ (cha)', 'しゃ (sha)', 'だ (da)', '他(other)'], correct_response: 'じゃ (ja)' },
+    { stimulus: 'じゅ', choices: ['じゅ (ju)', 'ちゅ (chu)', 'しゅ (shu)', 'づ (zu)', '他(other)'], correct_response: 'じゅ (ju)' },
+    { stimulus: 'じょ', choices: ['じょ (jo)', 'ちょ (cho)', 'しょ (sho)', 'ど (do)', '他(other)'], correct_response: 'じょ (jo)' },
+    { stimulus: 'ちゃ', choices: ['ちゃ (cha)', 'しゃ (sha)', 'じゃ (ja)', 'た (ta)', '他(other)'], correct_response: 'ちゃ (cha)' },
+    { stimulus: 'ちゅ', choices: ['ちゅ (chu)', 'しゅ (shu)', 'じゅ (ju)', 'つ (tsu)', '他(other)'], correct_response: 'ちゅ (chu)' },
+    { stimulus: 'ちょ', choices: ['ちょ (cho)', 'しょ (sho)', 'じょ (jo)', 'と (to)', '他(other)'], correct_response: 'ちょ (cho)' },
+    { stimulus: 'にゃ', choices: ['にゃ (nya)', 'ぎゃ (gya)', 'りゃ (rya)', 'な (na)', '他(other)'], correct_response: 'にゃ (nya)' },
+    { stimulus: 'にゅ', choices: ['にゅ (nyu)', 'ぎゅ (gyu)', 'りゅ (ryu)', 'ぬ (nu)', '他(other)'], correct_response: 'にゅ (nyu)' },
+    { stimulus: 'にょ', choices: ['にょ (nyo)', 'ぎょ (gyo)', 'りょ (ryo)', 'の (no)', '他(other)'], correct_response: 'にょ (nyo)' },
+    { stimulus: 'ひゃ', choices: ['ひゃ (hya)', 'しゃ (sha)', 'きゃ (kya)', 'は (ha)', '他(other)'], correct_response: 'ひゃ (hya)' },
+    { stimulus: 'ひゅ', choices: ['ひゅ (hyu)', 'しゅ (shu)', 'きゅ (kyu)', 'ふ (fu)', '他(other)'], correct_response: 'ひゅ (hyu)' },
+    { stimulus: 'ひょ', choices: ['ひょ (hyo)', 'しょ (sho)', 'きょ (kyo)', 'ほ (ho)', '他(other)'], correct_response: 'ひょ (hyo)' },
+    { stimulus: 'ぴゃ', choices: ['ぴゃ (pya)', 'びゃ (bya)', 'みゃ (mya)', 'ぱ (pa)', '他(other)'], correct_response: 'ぴゃ (pya)' },
+    { stimulus: 'ぴゅ', choices: ['ぴゅ (pyu)', 'びゅ (byu)', 'みゅ (myu)', 'ぷ (pu)', '他(other)'], correct_response: 'ぴゅ (pyu)' },
+    { stimulus: 'ぴょ', choices: ['ぴょ (pyo)', 'びょ (byo)', 'みょ (myo)', 'ぽ (po)', '他(other)'], correct_response: 'ぴょ (pyo)' },
+    { stimulus: 'びゃ', choices: ['びゃ (bya)', 'ぴゃ (pya)', 'みゃ (mya)', 'ば (ba)', '他(other)'], correct_response: 'びゃ (bya)' },
+    { stimulus: 'びゅ', choices: ['びゅ (byu)', 'ぴゅ (pyu)', 'みゅ (myu)', 'ぶ (bu)', '他(other)'], correct_response: 'びゅ (byu)' },
+    { stimulus: 'びょ', choices: ['びょ (byo)', 'ぴょ (pyo)', 'みょ (myo)', 'ぼ (bo)', '他(other)'], correct_response: 'びょ (byo)' },
+    { stimulus: 'みゃ', choices: ['みゃ (mya)', 'びゃ (bya)', 'にゃ (nya)', 'ま (ma)', '他(other)'], correct_response: 'みゃ (mya)' },
+    { stimulus: 'みゅ', choices: ['みゅ (myu)', 'びゅ (byu)', 'にゅ (nyu)', 'む (mu)', '他(other)'], correct_response: 'みゅ (myu)' },
+    { stimulus: 'みょ', choices: ['みょ (myo)', 'びょ (byo)', 'にょ (nyo)', 'も (mo)', '他(other)'], correct_response: 'みょ (myo)' },
+    { stimulus: 'りゃ', choices: ['りゃ (rya)', 'にゃ (nya)', 'だ (da)', 'ら (ra)', '他(other)'], correct_response: 'りゃ (rya)' },
+    { stimulus: 'りゅ', choices: ['りゅ (ryu)', 'にゅ (nyu)', 'じゅ (ju)', 'る (ru)', '他(other)'], correct_response: 'りゅ (ryu)' },
+    { stimulus: 'りょ', choices: ['りょ (ryo)', 'にょ (nyo)', 'ど (do)', 'ろ (ro)', '他(other)'], correct_response: 'りょ (ryo)' }
   ];
 
   const fixation = {
@@ -451,10 +469,10 @@ ${detailedRows.map((row, idx) => {
     on_start: function(trial) {
       if (trial.choices && Array.isArray(trial.choices)) {
         const choices = trial.choices.slice();
-        const otherIndex = choices.indexOf('他');
+        const otherIndex = choices.findIndex(c => c && c.includes('他'));
         if (otherIndex !== -1) {
-          choices.splice(otherIndex, 1);
-          trial.choices = jsPsych.randomization.shuffle(choices).concat(['他']);
+          const otherChoice = choices.splice(otherIndex, 1)[0];
+          trial.choices = jsPsych.randomization.shuffle(choices).concat([otherChoice]);
         } else {
           trial.choices = jsPsych.randomization.shuffle(choices);
         }
@@ -512,7 +530,7 @@ ${detailedRows.map((row, idx) => {
     timeline: [otherTextTrial],
     conditional_function: function() {
       const last = jsPsych.data.get().last(1).values()[0];
-      return last.chosen_choice === '他';
+      return last.chosen_choice && last.chosen_choice.includes('他');
     }
   };
 
