@@ -479,7 +479,7 @@ ${detailedRows.map((row, idx) => {
     type: jsPsychSurveyText,
     questions: [
       {
-        prompt: '<div style="margin-bottom: 15px;"><strong>ใส่เสียงที่ท่านได้ยินลงด้านล่างเป็นตัวอักษรโรมาจิ</strong><br/><strong style="display:block; margin-top:8px;">下記に聞こえた音をローマ字で入力してください</strong><br/><span style="color: #aaa; font-size: 14px;">เช่น di, ti, fi, ri เป็นต้น</span><br/><span style="color: #aaa; font-size: 14px;">例：di, ti, fi, ri など</span><br/><br/><span style="color: #ffcc00; font-size: 0.9em;"><strong>คำอธิบาย:</strong><br/>ถ้าเสียงเป็น "し" ให้ใส่ "si" หรือ "shi"<br/>ถ้าเสียงเป็น "ち" ให้ใส่ "ti" หรือ "chi"<br/>ถ้าเสียงเป็น "ひ" ให้ใส่ "hi" หรือ "fi"<br/>ถ้าเสียงเป็น "に" ให้ใส่ "ni"<br/><br/>補足：<br/>"し" = si/shi, "ち" = ti/chi, "ひ" = hi/fi, "に" = ni</span></div>',
+        prompt: '<div style="margin-bottom: 15px;"><strong>ใส่เสียงที่ท่านได้ยินลงด้านล่างเป็นตัวอักษรโรมาจิ</strong><br/><strong style="display:block; margin-top:8px;">下記に聞こえた音をローマ字で入力してください</strong><br/><span style="color: #aaa; font-size: 14px;">เช่น di, ti, fi, ri เป็นต้น</span><br/><span style="color: #aaa; font-size: 14px;">例：di, ti, fi, ri など</span><br/><br/><span style="color: #ffcc00; font-size: 0.9em;"><strong>ตัวอักษรที่ถูกต้อง (Japanese romaji):</strong><br/>し = <strong>shi</strong><br/>ち = <strong>chi</strong><br/>ひ = <strong>hi</strong><br/>に = <strong>ni</strong><br/><br/><strong>หากได้ยินต่างจากภาษาญี่ปุ่น:</strong><br/>ถ้าได้ยิน "si" (ไม่ใช่ "shi") → ใส่ si<br/>ถ้าได้ยิน "ti" (ไม่ใช่ "chi") → ใส่ ti<br/>ถ้าได้ยิน "fi" (ไม่ใช่ "hi") → ใส่ fi<br/><br/>補足：<br/>正しい発音：し=shi, ち=chi, ひ=hi, に=ni<br/>もし違う音に聞こえたら：si, ti, fi など入力してください</span></div>',
         name: 'other_sound',
         placeholder: 'พิมพ์เสียงโรมาจิ / ローマ字を入力',
         required: true
