@@ -25,39 +25,18 @@
   const jsPsych = initJsPsych({
     on_finish: function() {
       const allData = jsPsych.data.get().values();
-
-      // ===================== คัดเฉพาะ response trials =====================
       const responseRows = allData.filter(r => r.task === 'response');
       
-      // ===================== แยก tan-on กับ yo-on =====================
+      // ===================== ลำดับเสียง 44 ข้อ =====================
+      const stimulusOrder = [
+        'し', 'ち', 'ひ', 'に', 'ぎ', 'じ', 'き', 'り', 'み', 'び', 'ぴ',
+        'きゃ', 'きゅ', 'きょ', 'ぎゃ', 'ぎゅ', 'ぎょ', 'しゃ', 'しゅ', 'しょ', 'じゃ', 'じゅ', 'じょ',
+        'ちゃ', 'ちゅ', 'ちょ', 'にゃ', 'にゅ', 'にょ', 'ひゃ', 'ひゅ', 'ひょ', 'ぴゃ', 'ぴゅ', 'ぴょ',
+        'びゃ', 'びゅ', 'びょ', 'みゃ', 'みゅ', 'みょ', 'りゃ', 'りゅ', 'りょ'
+      ];
+      
       const tanOnStimuli = ['し', 'ち', 'ひ', 'に', 'ぎ', 'じ', 'き', 'り', 'み', 'び', 'ぴ'];
-      const yoOnStimuli = ['きゃ', 'きゅ', 'きょ', 'ぎゃ', 'ぎゅ', 'ぎょ', 'しゃ', 'しゅ', 'しょ', 'じゃ', 'じゅ', 'じょ', 'ちゃ', 'ちゅ', 'ちょ', 'にゃ', 'にゅ', 'にょ', 'ひゃ', 'ひゅ', 'ひょ', 'ぴゃ', 'ぴゅ', 'ぴょ', 'びゃ', 'びゅ', 'びょ', 'みゃ', 'みゅ', 'みょ', 'りゃ', 'りゅ', 'りょ'];
       
-      const tanOnResponses = responseRows.filter(r => tanOnStimuli.includes(r.stimulus || ''));
-      const yoOnResponses = responseRows.filter(r => yoOnStimuli.includes(r.stimulus || ''));
-
-      // ===================== คำนวณสถิติ =====================
-      const totalCorrect = responseRows.filter(r => r.correct === true || r.correct === 'true').length;
-      const totalIncorrect = responseRows.length - totalCorrect;
-      
-      const tanOnCorrect = tanOnResponses.filter(r => r.correct === true || r.correct === 'true').length;
-      const tanOnTotal = tanOnResponses.length;
-      const tanOnAccuracy = tanOnTotal > 0 ? Math.round((tanOnCorrect / tanOnTotal) * 100) : 0;
-      
-      const yoOnCorrect = yoOnResponses.filter(r => r.correct === true || r.correct === 'true').length;
-      const yoOnTotal = yoOnResponses.length;
-      const yoOnAccuracy = yoOnTotal > 0 ? Math.round((yoOnCorrect / yoOnTotal) * 100) : 0;
-
-      // ===================== Response Time (ms) =====================
-      const allRts = responseRows.map(r => Number(r.rt)).filter(x => !isNaN(x));
-      const meanRtAll = allRts.length ? Math.round(allRts.reduce((a, b) => a + b, 0) / allRts.length) : 0;
-      
-      const tanOnRts = tanOnResponses.map(r => Number(r.rt)).filter(x => !isNaN(x));
-      const meanRtTanOn = tanOnRts.length ? Math.round(tanOnRts.reduce((a, b) => a + b, 0) / tanOnRts.length) : 0;
-      
-      const yoOnRts = yoOnResponses.map(r => Number(r.rt)).filter(x => !isNaN(x));
-      const meanRtYoOn = yoOnRts.length ? Math.round(yoOnRts.reduce((a, b) => a + b, 0) / yoOnRts.length) : 0;
-
       // ===================== ดึงข้อมูลส่วนบุคคล =====================
       const preFormData = allData.find(r => r.task === 'pre_survey_form') || {};
       const studyYear = preFormData.study_year || 'n/a';
@@ -66,73 +45,82 @@
       const stayMonth = preFormData.stay_month || 'n/a';
       const email = preFormData.email || 'n/a';
 
-      // ===================== สรุปผล - แสดงใน console =====================
-      const summary = `
+      // ===================== นับจำนวนคนที่ตอบ (Respondent ID) =====================
+      // ใช้ timestamp เพื่อสร้าง unique ID เล็กน้อย
+      const respondentId = String(Math.floor(Date.now() / 1000) % 1000).padStart(3, '0');
+
+      // ===================== คำนวณ tan-on vs yo-on =====================
+      const tanOnResponses = responseRows.filter(r => tanOnStimuli.includes(r.stimulus || ''));
+      const tanOnCorrect = tanOnResponses.filter(r => r.correct === true || r.correct === 'true').length;
+      const yoOnResponses = responseRows.filter(r => !tanOnStimuli.includes(r.stimulus || ''));
+      const yoOnCorrect = yoOnResponses.filter(r => r.correct === true || r.correct === 'true').length;
+
+      // ===================== สร้าง Summary Row แรก =====================
+      const summaryRow = {
+        respondent_id: respondentId,
+        study_year: studyYear,
+        study_month: studyMonth,
+        stay_year: stayYear,
+        stay_month: stayMonth,
+        tan_on_correct: tanOnCorrect,
+        yo_on_correct: yoOnCorrect
+      };
+
+      // ===================== สร้าง Detailed Rows (44 ข้อ เรียงตามลำดับ) =====================
+      const detailedRows = [];
+      stimulusOrder.forEach((stim, index) => {
+        const response = responseRows.find(r => r.stimulus === stim);
+        if (response) {
+          detailedRows.push({
+            respondent_id: respondentId,
+            stimulus_order: index + 1,
+            stimulus: stim,
+            correct_response: response.correct_response,
+            response: response.chosen_choice || 'n/a',
+            is_correct: response.correct === true || response.correct === 'true' ? 'TRUE' : 'FALSE',
+            reaction_time_ms: response.rt || 'n/a'
+          });
+        }
+      });
+
+      // ===================== แสดงผลในหน้าจอ =====================
+      const displayText = `
 ════════════════════════════════════════════════════════
                     ผลการทดสอบ / テスト結果
 ════════════════════════════════════════════════════════
 
-【ข้อมูลส่วนบุคคล / 個人情報】
-1. เสียงที่ตอบถูก: ${totalCorrect}/44
-3. เสียงที่ตอบผิด: ${totalIncorrect}/44
-6. Response Time (เฉลี่ย): ${meanRtAll} ms
+【ข้อมูลผู้ตอบ】
+- ID: ${respondentId}
+- ปีเรียนญี่ปุ่น: ${studyYear}
+- เดือนเรียนญี่ปุ่น: ${studyMonth}
+- ปีอาศัยญี่ปุ่น: ${stayYear}
+- เดือนอาศัยญี่ปุ่น: ${stayMonth}
 
-7. ปีที่เรียนภาษาญี่ปุ่น: ${studyYear}
-8. เดือนที่เรียนภาษาญี่ปุ่น: ${studyMonth}
-10. ปีที่อาศัยในญี่ปุ่น: ${stayYear}
-11. เดือนที่อาศัยในญี่ปุ่น: ${stayMonth}
-12. Email: ${email}
+【ผลสรุป】
+- ตอบถูก Tan-on (単音): ${tanOnCorrect}/11
+- ตอบถูก Yo-on (拗音): ${yoOnCorrect}/33
+- รวมตอบถูก: ${tanOnCorrect + yoOnCorrect}/44
 
-════════════════════════════════════════════════════════
-【สรุปผล / サマリー】
-════════════════════════════════════════════════════════
-
-📊 รวมทั้งหมด:
-   • ตอบถูก: ${totalCorrect}/44 (${Math.round((totalCorrect/44)*100)}%)
-   • ตอบผิด: ${totalIncorrect}/44 (${Math.round((totalIncorrect/44)*100)}%)
-   • เวลาเฉลี่ย: ${meanRtAll} ms
-
-📊 単音 (Tan-on) - 11 ข้อ:
-   • ตอบถูก: ${tanOnCorrect}/${tanOnTotal} (${tanOnAccuracy}%)
-   • เวลาเฉลี่ย: ${meanRtTanOn} ms
-
-📊 拗音 (Yo-on) - 33 ข้อ:
-   • ตอบถูก: ${yoOnCorrect}/${yoOnTotal} (${yoOnAccuracy}%)
-   • เวลาเฉลี่ย: ${meanRtYoOn} ms
+【รายละเอียด 44 ข้อ】
+${detailedRows.map((row, idx) => {
+  const isCorrectStr = row.is_correct === 'TRUE' ? '✓' : '✗';
+  return `${(idx + 1).toString().padStart(2, '0')}. ${row.stimulus} → ${row.response} [${row.correct_response}] ${isCorrectStr}`;
+}).join('\n')}
 
 ════════════════════════════════════════════════════════
       ข้อมูลถูกส่งไปยัง Google Sheets แล้ว
 ════════════════════════════════════════════════════════
 `;
       
-      console.log(summary);
+      console.log(displayText);
 
-      // ===================== เตรียมข้อมูลสำหรับ Google Sheet =====================
-      // สร้าง payload รายละเอียด
-      const detailedSummary = [];
-      detailedSummary.push({ row: 1, label: 'เสียงที่ตอบถูก', value: totalCorrect });
-      detailedSummary.push({ row: 3, label: 'เสียงที่ตอบผิด', value: totalIncorrect });
-      detailedSummary.push({ row: 6, label: 'Response Time เฉลี่ย (ms)', value: meanRtAll });
-      detailedSummary.push({ row: 7, label: 'ปีที่เรียนญี่ปุ่น', value: studyYear });
-      detailedSummary.push({ row: 8, label: 'เดือนที่เรียนญี่ปุ่น', value: studyMonth });
-      detailedSummary.push({ row: 10, label: 'ปีที่อาศัยญี่ปุ่น', value: stayYear });
-      detailedSummary.push({ row: 11, label: 'เดือนที่อาศัยญี่ปุ่น', value: stayMonth });
-      detailedSummary.push({ row: 12, label: 'Email', value: email });
-
-      const bottomSummary = [
-        { label: 'Average RT (All)', value: meanRtAll },
-        { label: 'Tan-on (単音) - Accuracy', value: `${tanOnAccuracy}% (${tanOnCorrect}/${tanOnTotal})` },
-        { label: 'Tan-on (単音) - Average RT', value: `${meanRtTanOn} ms` },
-        { label: 'Yo-on (拗音) - Accuracy', value: `${yoOnAccuracy}% (${yoOnCorrect}/${yoOnTotal})` },
-        { label: 'Yo-on (拗音) - Average RT', value: `${meanRtYoOn} ms` }
-      ];
-
-      // ส่งข้อมูลไปยัง Google Apps Script
+      // ===================== ส่งข้อมูลไปยัง Google Apps Script =====================
       const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzoWL_Z39qNRGM5JCH5Aw2-Zh6PQNSXDvlL_quRq9HvPJ438F_G9_GCQOCqxwgONY5tGw/exec';
       const payload = {
+        respondent_id: respondentId,
+        summary: summaryRow,
+        detailed: detailedRows,
         raw: allData,
-        detailedSummary: detailedSummary,
-        bottomSummary: bottomSummary,
         sheetId: '1kmambkSB2os6UGpYd7PHZqyH8tmkJE4BvSWyjGzQQw0'
       };
 
@@ -143,7 +131,7 @@
       .then(response => response.json())
       .then(result => {
         if (result.success) {
-          alert('ข้อมูลถูกส่งไปยัง Google Sheets เรียบร้อยแล้ว!\nData successfully sent to Google Sheets!');
+          alert('ข้อมูลถูกส่งไปยัง Google Sheets เรียบร้อยแล้ว!\nID: ' + respondentId + '\nData successfully sent to Google Sheets!');
         } else {
           alert('เกิดข้อผิดพลาด: ' + result.error);
         }
