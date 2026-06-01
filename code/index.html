@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Test jsPsych Experiment</title>
+  <script src="https://unpkg.com/jspsych@7.3.3"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.2"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-html-button-response@1.1.2"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-survey-text@1.1.2"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-survey-multi-choice@1.1.0"></script>
+  <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+  <link href="https://unpkg.com/jspsych@7.3.3/css/jspsych.css" rel="stylesheet" />
+  <style>
+    body { background: #000; color: #fff; }
+    .jspsych-display-element, .jspsych-content-wrapper { background: #000; color: #fff; }
+    .jspsych-btn { background: #222; color: #fff; border: 1px solid #555; }
+    input[type="text"], input[type="email"], textarea { background: #111; color: #fff; border: 1px solid #444; }
+  </style>
+</head>
+<body></body>
+<script>
+  // ========================================
+  // ขั้นตอนที่ 1: เริ่มต้น jsPsych และตั้งค่าการดาวน์โหลดผลการทดลอง
+  // ========================================
+  const jsPsych = initJsPsych({
+    on_finish: function() {
+      // สร้าง workbook จากข้อมูลทั้งหมด และเพิ่ม sheet สำหรับสรุปผล
+      const allData = jsPsych.data.get().values();
+
+      // Raw data sheet
+      const rawSheet = XLSX.utils.json_to_sheet(allData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, rawSheet, 'raw');
+
+      // คัดเฉพาะ trial ตอบคำถามเพื่อคำนวณสถิติ
+      const responseRows = allData.filter(r => r.task === 'response' || r.trial_type === 'html-button-response');
+      const total = responseRows.length;
+      const correctCount = responseRows.filter(r => r.correct === true || r.correct === 'true').length;
+      const accuracy = total > 0 ? (correctCount / total) * 100 : 0;
+      const rts = responseRows.map(r => Number(r.rt)).filter(x => !isNaN(x));
+      const meanRT = rts.length ? Math.round((rts.reduce((a, b) => a + b, 0) / rts.length) * 100) / 100 : '';
+
+      // per-stimulus accuracy
+      const byStim = {};
+      responseRows.forEach(r => {
+        const s = typeof r.stimulus === 'string' ? r.stimulus : (r.stim || '');
+        if (!byStim[s]) byStim[s] = { n: 0, correct: 0 };
+        byStim[s].n++;
+        if (r.correct === true || r.correct === 'true') byStim[s].correct++;
+      });
+      const perStim = Object.keys(byStim).map(k => ({ stimulus: k, n: byStim[k].n, correct: byStim[k].correct, accuracy: Math.round((byStim[k].correct / byStim[k].n) * 10000) / 100 }));
+
+      const summaryRows = [
+        { metric: 'total_response_trials', value: total },
+        { metric: 'correct_count', value: correctCount },
+        { metric: 'accuracy_percent', value: Math.round(accuracy * 100) / 100 },
+        { metric: 'mean_rt_ms', value: meanRT },
+        { metric: 'other_count', value: allData.filter(r => r.task === 'other_text' || r.trial_type === 'survey-text').length }
+      ];
+
+      const summarySheet = XLSX.utils.json_to_sheet(summaryRows);
+      XLSX.utils.book_append_sheet(wb, summarySheet, 'summary');
+      const perStimSheet = XLSX.utils.json_to_sheet(perStim);
+      XLSX.utils.book_append_sheet(wb, perStimSheet, 'per_stimulus');
+
+      // เขียน workbook เป็นไฟล์และดาวน์โหลด
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'results.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+  });
+
+  // ========================================
+  // สร้าง timeline array เพื่อเก็บขั้นตอนทั้งหมดของการทดลอง
+  // ========================================
+  const timeline = [];
+
+  // ========================================
+  // ขั้นตอนที่ 2: หน้าแรก - ชื่องานวิจัย และหมายเหตุเกี่ยวกับความเป็นส่วนตัว
+  // ========================================
+  const titleAndNotice = {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: `
+      <div style="text-align: center; padding: 30px 20px;">
+        <h1 style="font-size: 18px; line-height: 1.8; margin: 0 0 20px 0;">
+          在日タイ語母語話者におけるイ段音（単音／拗音）<br>の口蓋化子音の聴取困難<br>
+          <span style="font-size: 16px; font-weight: normal;">— 大規模横断調査による要因分析と教育への示唆 —</span><br>
+          <span style="font-size: 14px; font-weight: normal; color: #aaa; margin-top: 10px; display: block;">ปัญหาการแยกแยะเสียงพยัญชนะเพดานแข็ง (เสียงเดี่ยว/เสียงควบ)<br>ของผู้พูดภาษาไทยเป็นภาษาแม่ที่อาศัยในญี่ปุ่น<br>— การวิเคราะห์ปัจจัยผ่านการสำรวจขนาดใหญ่ และการให้ข้อเสนอแนะทางการศึกษา —</span>
+        </h1>
+        
+        <div style="background: #333; color: #fff; padding: 20px; border: 1px solid #666; border-radius: 5px; text-align: center; font-size: 14px; line-height: 1.6; margin-top: 20px;">
+          <strong>重要な注記 / หมายเหตุสำคัญ:</strong><br>
+          本調査は研究目的でのデータ収集のみを目的としています。ご提供いただいたデータは機密として保管され、個人を特定できる情報を含まない概要形式で提示されます。<br>
+          研究への参加は自由意思で決定でき、途中で中断・撤回できること、中断・撤回してもなんら不利益を被りません。<br>
+          ご提供いただいたデータは本研究に使用され、学会で発表されます。<br>
+          <br>
+          การสำรวจครั้งนี้มีวัตถุประสงค์เพื่อเก็บรวบรวมข้อมูลสำหรับการศึกษาวิจัยเท่านั้น ข้อมูลที่ท่านให้จะถูกเก็บไว้เป็นความลับ และนำเสนอในรูปแบบภาพรวมโดยไม่มีการระบุข้อมูลที่สามารถระบุตัวตนของท่านได้<br>
+          การเข้าร่วมการศึกษานี้เป็นไปตามความสมัครใจของคุณ คุณสามารถหยุดหรือถอนตัวได้ตลอดเวลา และการหยุดหรือถอนตัวจะไม่ก่อให้เกิดผลเสียใด ๆ<br>
+          ข้อมูลของท่านจะถูกใช้ในงานวิจัยนี้ และจะถูกนำเสนอในที่ประชุมทางวิชาการ<br>
+          <br>
+          <strong>ご質問やお問い合わせ / ติดต่อสอบถามผู้วิจัย:</strong><br>
+          070-9192-6459 / u548378a@ecs.osaka-u.ac.jp<br>
+          ケハナン アカラポン (Akarapong Kehanan)<br>
+          大阪大学大学院 人文学研究科 博士後期課程
+        </div>
+      </div>
+    `,
+    choices: ['同意する / ยินยอม', '同意しません / ไม่ยินยอม'],
+    button_html: '<button class="jspsych-btn" style="min-width: 150px; margin: 12px;">%choice%</button>',
+    data: { task: 'title_and_notice' },
+    on_finish: function(data) {
+      data.consent = data.response === 0; // 0 = ยินยอม, 1 = ไม่ยินยอม
+    }
+  };
+
+  // ========================================
+  // หน้าแสดงเมื่อผู้เข้าร่วมไม่ยินยอม
+  // ========================================
+  const consentRefusal = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+      <div style="text-align: center; padding: 30px 20px;">
+        <h1 style="font-size: 24px; margin: 0 0 20px 0; color: #ff6b6b;">
+          申し訳ございません / ขออภัย
+        </h1>
+        <div style="background: #333; color: #fff; padding: 20px; border: 1px solid #ff6b6b; border-radius: 5px; text-align: center; font-size: 14px; line-height: 1.8; margin-top: 20px;">
+          <p style="margin: 10px 0;">
+            <strong>同意していただけなかったため、本調査は終了いたします。</strong><br>
+            ご協力いただき、ありがとうございました。
+          </p>
+          <p style="margin: 10px 0;">
+            <strong>ท่านไม่ยินยอมในการเข้าร่วมการวิจัย จึงขอสิ้นสุดการสำรวจนี้</strong><br>
+            ขอบคุณสำหรับความเสียสละเวลาของท่าน
+          </p>
+        </div>
+      </div>
+    `,
+    choices: 'NO_KEYS',
+    trial_duration: 999999999
+  };
+
+  // ========================================
+  // ขั้นตอนที่ 3: แบบสอบถามเกี่ยวกับประสบการณ์การเรียนการออกเสียง
+  // คำถาม: "คุณเคยเรียนการออกเสียงแบบเป็นระบบหรือไม่"
+  // ========================================
+  const preSurveyChoice = {
+    type: jsPsychSurveyMultiChoice,
+    questions: [
+      {
+        prompt: '発音学習経験はありますか？\n<div style="margin-top:6px;color:#ccc;font-size:0.9em">คุณเคยเรียนการออกเสียงแบบเป็นระบบหรือไม่ (มี/ไม่มี)</div>',
+        name: 'pron_experience',
+        options: ['無', '有'],
+        required: true
+      }
+    ],
+    data: { task: 'pre_survey_choice' }
+  };
+
+  // ========================================
+  // ขั้นตอนที่ 4: แบบสอบถามส่วนที่ 1
+  // คำถาม: ระยะเวลาการเรียนภาษาญี่ปุ่น / ระยะเวลาพำนักในญี่ปุ่น / อีเมล
+  // ========================================
+  const preSurveyForm = {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: function() {
+      // สร้าง select options สำหรับปี 0-50 และเดือน (มี default 'กรุณาเลือก' เป็นตัวแรก)
+      let yearOptions = '<option value="">กรุณาเลือก / 選択してください</option>';
+      for (let i = 0; i <= 50; i++) { yearOptions += `<option value="${i}">${i} 年/ปี</option>`; }
+      let monthOptions = '<option value="">กรุณาเลือก / 選択してください</option>';
+      for (let m = 1; m <= 12; m++) { monthOptions += `<option value="${m}">${m} ヶ月/เดือน</option>`; }
+
+      return `
+        <div style="color:#fff">
+          <label><strong>学習期間（累積）はどのくらいですか？</strong></label>
+          <div style="margin-top:6px;color:#ccc;font-size:0.9em">ระยะเวลาการเรียนภาษาญี่ปุ่นรวม (ปี และ เดือน)</div>
+          <div style="margin:8px 0">
+            <select id="study_year">${yearOptions}</select>
+            <select id="study_month">${monthOptions}</select>
+          </div>
+
+          <label><strong>滞在期間（合計）はどのくらいですか？</strong></label>
+          <div style="margin-top:6px;color:#ccc;font-size:0.9em">ระยะเวลาการพำนักที่ประเทศญี่ปุ่นรวม (ปี และ เดือน)</div>
+          <div style="margin:8px 0">
+            <select id="stay_year">${yearOptions}</select>
+            <select id="stay_month">${monthOptions}</select>
+          </div>
+
+          <label><strong>今後の連絡のため、メールアドレスをご記入ください。</strong></label>
+          <div style="margin-top:6px;color:#ccc;font-size:0.9em">กรุณากรอกอีเมล (@ และ . ถูกใส่ไว้ให้แล้ว)<br>
+          必須ではありません。このメールアドレスの個人情報は、研究が完了するまで（3年以内）安全ななデータベースに保管され、緊急の連絡の場合のみに使用されます。<br>
+          ไม่จำเป็นต้องใส่ ข้อมูลส่วนตัวในช่องอีเมลนี้จะถูกเก็บไว้จนกว่างานวิจัยจะเสร็จสมบูรณ์ (ไม่เกิน 3 ปี) ใน database ที่ปลอดภัย และจะใช้สำหรับการติดต่อกลับในกรณีฉุกเฉินเท่านั้น</div>
+          <div style="margin:12px auto; display:flex; gap:4px; align-items:center; justify-content:center; flex-wrap:wrap; max-width:500px;">
+            <input id="email_user" type="text" placeholder="email" style="width:120px; background:#111; color:#fff; border:1px solid #444; padding:6px; font-size:0.95em;" />
+            <span>@</span>
+            <input id="email_domain" type="text" placeholder="example" style="width:120px; background:#111; color:#fff; border:1px solid #444; padding:6px; font-size:0.95em;" />
+            <span>.</span>
+            <input id="email_tld" type="text" placeholder="com" style="width:80px; background:#111; color:#fff; border:1px solid #444; padding:6px; font-size:0.95em;" />
+          </div>
+          
+          <button id="preSurveyFormBtn" style="margin-top:20px; padding:10px 30px; background:#222; color:#fff; border:1px solid #555; cursor:pointer; font-size:1em; border-radius:4px;">Continue</button>
+          <div id="validationError" style="margin-top:10px; color:#ff6b6b; font-size:0.95em; display:none;"></div>
+        </div>
+      `;
+    },
+    choices: [],
+    data: { task: 'pre_survey_form' },
+    on_load: function() {
+      const btn = document.getElementById('preSurveyFormBtn');
+      btn.addEventListener('click', function() {
+        const study_year = document.getElementById('study_year')?.value || '';
+        const study_month = document.getElementById('study_month')?.value || '';
+        const stay_year = document.getElementById('stay_year')?.value || '';
+        const stay_month = document.getElementById('stay_month')?.value || '';
+        
+        if (!study_year || !study_month || !stay_year || !stay_month) {
+          const errorDiv = document.getElementById('validationError');
+          errorDiv.innerText = 'กรุณาเลือกระยะเวลาให้ครบถ้วน\n選択を完了してください';
+          errorDiv.style.display = 'block';
+          return;
+        }
+        
+        const user = document.getElementById('email_user')?.value || '';
+        const domain = document.getElementById('email_domain')?.value || '';
+        const tld = document.getElementById('email_tld')?.value || '';
+        const email = (user || domain || tld) ? `${user}@${domain}.${tld}` : '';
+        jsPsych.data.write({ task: 'pre_survey_form', study_year, study_month, stay_year, stay_month, email });
+        jsPsych.finishTrial();
+      });
+    }
+  };
+
+  // ========================================
+  // ขั้นตอนที่ 5: แบบสอบถามส่วนที่ 2 (แบบมีเงื่อนไข)
+  // คำถาม: "ชื่อสถาบันที่เรียนการออกเสียง" (ถ้าตอบ 'มี' ในขั้นตอนที่ 3)
+  // ========================================
+  const institutionTrial = {
+    type: jsPsychSurveyText,
+    questions: [
+      {
+        prompt: '日本語の体系的な発音学習（授業／科目等）を受講したことはありますか。受講機関があればご記入ください（任意）',
+        name: 'institution',
+        placeholder: '受講した場合は機関名を入力',
+        required: false
+      }
+    ],
+    data: { task: 'pre_survey_institution' }
+  };
+
+  // ========================================
+  // ขั้นตอนที่ 6: คำแนะนำการทดลอง
+  // แสดงรายละเอียดของการทดลอง (44 ข้อ)
+  // ========================================
+  const instructions = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+      <h2>ยินดีต้อนรับ</h2>
+      <p>นี่คือการทดสอบการแยกแยะเสียง</p>
+      <p>แบบทดสอบมีทั้งหมด 44 ข้อ</p>
+      <p>ในแต่ละข้อ จะมีเสียงเดียวเล่น และให้คุณเลือกคำตอบเดียวจากห้า</p>
+      <p>ระบบจะสุ่มลำดับตัวเลือกในแต่ละข้อ</p>
+      <p>กดปุ่มใดก็ได้เพื่อเริ่ม</p>
+    `
+  };
+  // เพิ่มแบบสอบถามก่อนคำแนะนำ/การทดลอง (เรียงตามไฟล์แนบ)
+  timeline.push(titleAndNotice); // ชื่องานวิจัยและหมายเหตุ
+  
+  // ถ้าไม่ยินยอม ให้แสดงข้อความและสิ้นสุดการทดลอง
+  const conditionalConsent = {
+    timeline: [consentRefusal],
+    conditional_function: function() {
+      const last = jsPsych.data.get().last(1).values()[0];
+      return !last.consent; // ถ้าไม่ยินยอม ให้ show consentRefusal
+    }
+  };
+  timeline.push(conditionalConsent);
+  
+  timeline.push(preSurveyForm); // 学習期間 / 滞在期間 / email
+  timeline.push(preSurveyChoice); // 発音学習経験 (有/無)
+  const conditionalInstitution = {
+    timeline: [institutionTrial],
+    conditional_function: function() {
+      const last = jsPsych.data.get().last(1).values()[0];
+      let resp = last.response || last.responses;
+      if (typeof resp === 'string') {
+        try { resp = JSON.parse(resp); } catch(e) {}
+      }
+      if (Array.isArray(resp)) return resp.includes('有');
+      if (resp && typeof resp === 'object') return Object.values(resp).indexOf('有') !== -1 || Object.values(resp).some(v=>v==='有');
+      return resp === '有';
+    }
+  };
+  timeline.push(conditionalInstitution);
+  timeline.push(instructions);
+
+  // ========================================
+  // ขั้นตอนที่ 7: ข้อมูลการทดลอง (ตัวอักษร 44 ข้อ)
+  // ========================================
+  // 🔊 วิธีเพิ่มไฟล์เสียง:
+  // 1. สร้างโฟลเดอร์ "audio" ในโฟลเดอร์เดียวกับไฟล์ HTML นี้
+  // 2. ใส่ไฟล์เสียง (เช่น si.mp3, ti.mp3, hi.mp3 เป็นต้น) ลงในโฟลเดอร์ audio
+  // 3. แต่ละไฟล์ต้องตั้งชื่อตามตัวอักษร (stimulus) เช่น: し.mp3, ち.mp3, ひ.mp3 เป็นต้น
+  // 4. แล้วแทนที่ audioPlaceholder (ด้านล่าง) ด้วย audioPlayer trial (ดูเพิ่มเติมด้านล่าง)
+  const trials = [
+    { stimulus: 'し', choices: ['し', 'ち', 'ひ', 'き', '他'], correct_response: 'し' },
+    { stimulus: 'ち', choices: ['ち', 'し', 'じ', 'き', '他'], correct_response: 'ち' },
+    { stimulus: 'ひ', choices: ['ひ', 'し', 'き', 'ち', '他'], correct_response: 'ひ' },
+    { stimulus: 'に', choices: ['に', 'ぎ', 'り', 'み', '他'], correct_response: 'に' },
+    { stimulus: 'ぎ', choices: ['ぎ', 'に', 'き', 'じ', '他'], correct_response: 'ぎ' },
+    { stimulus: 'じ', choices: ['じ', 'ち', 'し', 'ぎ', '他'], correct_response: 'じ' },
+    { stimulus: 'き', choices: ['き', 'ぎ', 'ち', 'し', '他'], correct_response: 'き' },
+    { stimulus: 'り', choices: ['り', 'に', 'じ', 'ぎ', '他'], correct_response: 'り' },
+    { stimulus: 'み', choices: ['み', 'び', 'に', 'ぴ', '他'], correct_response: 'み' },
+    { stimulus: 'び', choices: ['び', 'ぴ', 'み', 'じ', '他'], correct_response: 'び' },
+    { stimulus: 'ぴ', choices: ['ぴ', 'び', 'み', 'ひ', '他'], correct_response: 'ぴ' },
+    { stimulus: 'きゃ', choices: ['きゃ', 'しゃ', 'ちゃ', 'か', '他'], correct_response: 'きゃ' },
+    { stimulus: 'きゅ', choices: ['きゅ', 'ひゅ', 'ちゅ', 'く', '他'], correct_response: 'きゅ' },
+    { stimulus: 'きょ', choices: ['きょ', 'ひょ', 'ちょ', 'こ', '他'], correct_response: 'きょ' },
+    { stimulus: 'ぎゃ', choices: ['ぎゃ', 'じゃ', 'にゃ', 'が', '他'], correct_response: 'ぎゃ' },
+    { stimulus: 'ぎゅ', choices: ['ぎゅ', 'じゅ', 'にゅ', 'ぐ', '他'], correct_response: 'ぎゅ' },
+    { stimulus: 'ぎょ', choices: ['ぎょ', 'じょ', 'にょ', 'ご', '他'], correct_response: 'ぎょ' },
+    { stimulus: 'しゃ', choices: ['しゃ', 'ちゃ', 'ひゃ', 'さ', '他'], correct_response: 'しゃ' },
+    { stimulus: 'しゅ', choices: ['しゅ', 'ちゅ', 'ひゅ', 'す', '他'], correct_response: 'しゅ' },
+    { stimulus: 'しょ', choices: ['しょ', 'ちょ', 'ひょ', 'そ', '他'], correct_response: 'しょ' },
+    { stimulus: 'じゃ', choices: ['じゃ', 'ちゃ', 'しゃ', 'だ', '他'], correct_response: 'じゃ' },
+    { stimulus: 'じゅ', choices: ['じゅ', 'ちゅ', 'しゅ', 'づ', '他'], correct_response: 'じゅ' },
+    { stimulus: 'じょ', choices: ['じょ', 'ちょ', 'しょ', 'ど', '他'], correct_response: 'じょ' },
+    { stimulus: 'ちゃ', choices: ['ちゃ', 'しゃ', 'じゃ', 'た', '他'], correct_response: 'ちゃ' },
+    { stimulus: 'ちゅ', choices: ['ちゅ', 'しゅ', 'じゅ', 'つ', '他'], correct_response: 'ちゅ' },
+    { stimulus: 'ちょ', choices: ['ちょ', 'しょ', 'じょ', 'と', '他'], correct_response: 'ちょ' },
+    { stimulus: 'にゃ', choices: ['にゃ', 'ぎゃ', 'りゃ', 'な', '他'], correct_response: 'にゃ' },
+    { stimulus: 'にゅ', choices: ['にゅ', 'ぎゅ', 'りゅ', 'ぬ', '他'], correct_response: 'にゅ' },
+    { stimulus: 'にょ', choices: ['にょ', 'ぎょ', 'りょ', 'の', '他'], correct_response: 'にょ' },
+    { stimulus: 'ひゃ', choices: ['ひゃ', 'しゃ', 'きゃ', 'は', '他'], correct_response: 'ひゃ' },
+    { stimulus: 'ひゅ', choices: ['ひゅ', 'しゅ', 'きゅ', 'ふ', '他'], correct_response: 'ひゅ' },
+    { stimulus: 'ひょ', choices: ['ひょ', 'しょ', 'きょ', 'ほ', '他'], correct_response: 'ひょ' },
+    { stimulus: 'ぴゃ', choices: ['ぴゃ', 'びゃ', 'みゃ', 'ぱ', '他'], correct_response: 'ぴゃ' },
+    { stimulus: 'ぴゅ', choices: ['ぴゅ', 'びゅ', 'みゅ', 'ぷ', '他'], correct_response: 'ぴゅ' },
+    { stimulus: 'ぴょ', choices: ['ぴょ', 'びょ', 'みょ', 'ぽ', '他'], correct_response: 'ぴょ' },
+    { stimulus: 'びゃ', choices: ['びゃ', 'ぴゃ', 'みゃ', 'ば', '他'], correct_response: 'びゃ' },
+    { stimulus: 'びゅ', choices: ['びゅ', 'ぴゅ', 'みゅ', 'ぶ', '他'], correct_response: 'びゅ' },
+    { stimulus: 'びょ', choices: ['びょ', 'ぴょ', 'みょ', 'ぼ', '他'], correct_response: 'びょ' },
+    { stimulus: 'みゃ', choices: ['みゃ', 'びゃ', 'にゃ', 'ま', '他'], correct_response: 'みゃ' },
+    { stimulus: 'みゅ', choices: ['みゅ', 'びゅ', 'にゅ', 'む', '他'], correct_response: 'みゅ' },
+    { stimulus: 'みょ', choices: ['みょ', 'びょ', 'にょ', 'も', '他'], correct_response: 'みょ' },
+    { stimulus: 'りゃ', choices: ['りゃ', 'にゃ', 'だ', 'ら', '他'], correct_response: 'りゃ' },
+    { stimulus: 'りゅ', choices: ['りゅ', 'にゅ', 'じゅ', 'る', '他'], correct_response: 'りゅ' },
+    { stimulus: 'りょ', choices: ['りょ', 'にょ', 'ど', 'ろ', '他'], correct_response: 'りょ' }
+  ];
+
+  const fixation = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: '<div style="font-size: 72px;">+</div>',
+    choices: 'NO_KEYS',
+    trial_duration: 500
+  };
+
+  const audioPlaceholder = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+      return `<p>Placeholder สำหรับเสียง:</p><p style="font-size: 64px; margin: 24px 0;">${jsPsych.timelineVariable('stimulus')}</p>`;
+    },
+    choices: 'NO_KEYS',
+    trial_duration: 1000
+  };
+
+  const responseTrial = {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: '<p>เลือกคำตอบที่ตรงกับเสียงที่ได้ยิน</p>',
+    choices: jsPsych.timelineVariable('choices'),
+    button_html: '<button class="jspsych-btn" style="min-width: 120px; margin: 8px;">%choice%</button>',
+    data: {
+      task: 'response',
+      correct_response: jsPsych.timelineVariable('correct_response')
+    },
+    on_start: function(trial) {
+      if (trial.choices && Array.isArray(trial.choices)) {
+        const choices = trial.choices.slice();
+        const otherIndex = choices.indexOf('他');
+        if (otherIndex !== -1) {
+          choices.splice(otherIndex, 1);
+          trial.choices = jsPsych.randomization.shuffle(choices).concat(['他']);
+        } else {
+          trial.choices = jsPsych.randomization.shuffle(choices);
+        }
+        if (!trial.data) {
+          trial.data = {};
+        }
+        trial.data.shuffled_choices = trial.choices.slice();
+      }
+    },
+    on_finish: function(data) {
+      const choiceIndex = data.response;
+      let selectedChoice = data.button_pressed;
+      if (!selectedChoice && data.shuffled_choices && typeof choiceIndex === 'number') {
+        selectedChoice = data.shuffled_choices[choiceIndex];
+      }
+      data.chosen_choice = selectedChoice;
+      data.correct = selectedChoice === data.correct_response;
+    }
+  };
+
+  const otherTextTrial = {
+    type: jsPsychSurveyText,
+    questions: [
+      {
+        prompt: 'กรุณาพิมพ์เสียงอื่นที่คุณได้ยิน',
+        name: 'other_sound',
+        placeholder: 'พิมพ์เสียงอื่นที่ได้ยิน',
+        required: true
+      }
+    ],
+    data: {
+      task: 'other_text'
+    },
+    on_finish: function(data) {
+      let responses = data.responses;
+      if (responses === undefined && data.response !== undefined) {
+        responses = data.response;
+      }
+      if (typeof responses === 'string') {
+        try {
+          responses = JSON.parse(responses);
+        } catch (e) {
+          responses = {};
+        }
+      }
+      data.other_sound = responses?.other_sound || '';
+    }
+  };
+
+  const otherTextTimeline = {
+    timeline: [otherTextTrial],
+    conditional_function: function() {
+      const last = jsPsych.data.get().last(1).values()[0];
+      return last.chosen_choice === '他';
+    }
+  };
+
+  const trialProcedure = {
+    timeline: [fixation, audioPlaceholder, responseTrial, otherTextTimeline],
+    timeline_variables: trials,
+    randomize_order: true // สุ่มลำดับข้อคำถาม (44 ข้อ)
+  };
+  timeline.push(trialProcedure);
+
+  const debrief = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: '<p>"ผู้วิจัยขอขอบพระคุณในความอนุเคราะห์และความเสียสละเวลาของท่านเป็นอย่างยิ่ง ข้อมูลของท่านเป็นประโยชน์อย่างยิ่งต่องานวิจัยชิ้นนี้ ขออวยพรให้ท่านประสบความสำเร็จในหน้าที่การงานและมีสุขภาพพลานามัยที่แข็งแรงสมบูรณ์"</p>'
+  };
+  timeline.push(debrief);
+
+  jsPsych.run(timeline);
+</script>
+</html>
