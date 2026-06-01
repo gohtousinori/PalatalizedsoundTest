@@ -27,11 +27,6 @@
       // สร้าง workbook จากข้อมูลทั้งหมด และเพิ่ม sheet สำหรับสรุปผล
       const allData = jsPsych.data.get().values();
 
-      // Raw data sheet
-      const rawSheet = XLSX.utils.json_to_sheet(allData);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, rawSheet, 'raw');
-
       // คัดเฉพาะ trial ตอบคำถามเพื่อคำนวณสถิติ
       const responseRows = allData.filter(r => r.task === 'response' || r.trial_type === 'html-button-response');
       const total = responseRows.length;
@@ -58,22 +53,31 @@
         { metric: 'other_count', value: allData.filter(r => r.task === 'other_text' || r.trial_type === 'survey-text').length }
       ];
 
-      const summarySheet = XLSX.utils.json_to_sheet(summaryRows);
-      XLSX.utils.book_append_sheet(wb, summarySheet, 'summary');
-      const perStimSheet = XLSX.utils.json_to_sheet(perStim);
-      XLSX.utils.book_append_sheet(wb, perStimSheet, 'per_stimulus');
+      // ส่งข้อมูลไปยัง Google Apps Script
+      const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzoWL_Z39qNRGM5JCH5Aw2-Zh6PQNSXDvlL_quRq9HvPJ438F_G9_GCQOCqxwgONY5tGw/exec';
+      const payload = {
+        raw: allData,
+        summary: summaryRows,
+        perStim: perStim,
+        sheetId: '1kmambkSB2os6UGpYd7PHZqyH8tmkJE4BvSWyjGzQQw0'
+      };
 
-      // เขียน workbook เป็นไฟล์และดาวน์โหลด
-      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([wbout], { type: 'application/octet-stream' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'results.xlsx';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
+      .then(response => response.json())
+      .then(result => {
+        if (result.success) {
+          alert('ข้อมูลถูกส่งไปยัง Google Sheets เรียบร้อยแล้ว!\nData successfully sent to Google Sheets!');
+        } else {
+          alert('เกิดข้อผิดพลาด: ' + result.error);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('เกิดข้อผิดพลาดในการส่งข้อมูล: ' + error.message);
+      });
     }
   });
 
@@ -174,6 +178,8 @@
       let yearOptions = '<option value="">กรุณาเลือก / 選択してください</option>';
       for (let i = 0; i <= 50; i++) { yearOptions += `<option value="${i}">${i} 年/ปี</option>`; }
       let monthOptions = '<option value="">กรุณาเลือก / 選択してください</option>';
+      monthOptions += '<option value="uncertain_0_6">ไม่แน่ใจ (ประมาณ0-6เดือน) / 不確定（約0-6か月）</option>';
+      monthOptions += '<option value="uncertain_6_12">ไม่แน่ใจ (ประมาณ6-12เดือน) / 不確定（約6-12か月）</option>';
       for (let m = 1; m <= 12; m++) { monthOptions += `<option value="${m}">${m} ヶ月/เดือน</option>`; }
 
       return `
