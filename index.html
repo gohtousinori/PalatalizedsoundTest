@@ -86,7 +86,7 @@
 
       // ===================== สร้าง result row (1 row ต่อ 1 participant) =====================
       const resultRow = {
-        'Email': email,
+        'อีเมล': email,
         'ระยะเวลาการเรียนภาษาญี่ปุ่นรวม (ปี)': studyYear,
         'ระยะเวลาการเรียนภาษาญี่ปุ่นรวม (เดือน)': studyMonth,
         'ระยะเวลาการพำนักที่ญี่ปุ่นรวม (ปี)': stayYear,
@@ -147,26 +147,33 @@
       resultRow['Total Yo-on Score'] = totalYoOn;
       resultRow['Average Response Time (ms)'] = countRT > 0 ? Math.round(totalRT / countRT) : 0;
 
-      // ===================== Download CSV =====================
-      const headers = Object.keys(resultRow);
-      const csvRows = [
-        headers.map(h => `"${h}"`).join(','),
-        headers.map(h => {
-          const value = resultRow[h];
-          return `"${value !== null && value !== undefined ? String(value).replace(/"/g, '""') : ''}"`;
-        }).join(',')
-      ];
-      const csvContent = '\uFEFF' + csvRows.join('\n');
+      // ===================== ส่งข้อมูลไปยัง Google Sheets =====================
+      const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzoWL_Z39qNRGM5JCH5Aw2-Zh6PQNSXDvlL_quRq9HvPJ438F_G9_GCQOCqxwgONY5tGw/exec';
+      
+      // สร้าง payload พร้อม resultRow (ซึ่งมี 44 Result และ RT columns)
+      const payload = {
+        action: 'appendRow',
+        sheetId: '1kmambkSB2os6UGpYd7PHZqyH8tmkJE4BvSWyjGzQQw0',
+        values: Object.values(resultRow),
+        headers: Object.keys(resultRow)
+      };
 
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', 'ResultPattern.csv');
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
+      .then(response => response.json())
+      .then(result => {
+        if (result.success) {
+          alert('✓ ข้อมูลของท่านถูกส่งไปยัง Google Sheets เรียบร้อยแล้ว!\n\n✓ Your data has been successfully sent to Google Sheets!\n\nThank you for your participation!');
+        } else {
+          alert('⚠️ เกิดข้อผิดพลาดในการส่งข้อมูล\n\nError: ' + (result.error || 'Unknown error'));
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('⚠️ เกิดข้อผิดพลาดในการเชื่อมต่อ\n\nConnection Error: ' + error.message + '\n\nPlease try again or contact the researcher.');
+      });
 
       // ===================== แสดงผลในหน้าจอ =====================
       const tanOnCorrect = responseRows.filter(r => tanOnList.includes(r.stimulus) && (r.correct === true || r.correct === 'true')).length;
@@ -178,7 +185,7 @@
 ════════════════════════════════════════════════════════
 
 【ข้อมูลพื้นฐาน】
-- Email: ${email}
+- อีเมล: ${email}
 - ปีเรียนญี่ปุ่น: ${studyYear}
 - เดือนเรียนญี่ปุ่น: ${studyMonth}
 - ปีอาศัยญี่ปุ่น: ${stayYear}
@@ -192,55 +199,11 @@
 - รวมตอบถูก: ${tanOnCorrect + yoOnCorrect}/44
 
 ════════════════════════════════════════════════════════
-      ข้อมูลกำลังส่งไปยัง Google Sheets และดาวน์โหลด...
+     ข้อมูลกำลังถูกส่งไปยัง Google Sheets...
 ════════════════════════════════════════════════════════
 `;
       
       console.log(displayText);
-
-      // ===================== ส่งข้อมูลไปยัง Google Apps Script =====================
-      const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzoWL_Z39qNRGM5JCH5Aw2-Zh6PQNSXDvlL_quRq9HvPJ438F_G9_GCQOCqxwgONY5tGw/exec';
-      
-      // สร้าง detailed rows สำหรับ Google Sheets
-      const detailedRows = [];
-      stimulusOrder.forEach((stim, index) => {
-        const trial = trialMap[stim];
-        if (trial) {
-          detailedRows.push({
-            Email: email,
-            stimulus_order: index + 1,
-            stimulus: stim,
-            correct_response: trial.correct_response,
-            response: trial.chosen_choice || 'n/a',
-            is_correct: trial.correct === true || trial.correct === 'true' ? 'TRUE' : 'FALSE',
-            reaction_time_ms: trial.rt || 'n/a'
-          });
-        }
-      });
-
-      const payload = {
-        respondent_data: resultRow,
-        detailed_results: detailedRows,
-        sheetId: '1kmambkSB2os6UGpYd7PHZqyH8tmkJE4BvSWyjGzQQw0'
-      };
-
-      fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      })
-      .then(response => response.json())
-      .then(result => {
-        console.log('Google Sheets response:', result);
-        if (result.success) {
-          alert('✓ ข้อมูลถูกส่งไปยัง Google Sheets เรียบร้อยแล้ว!\n\nข้อมูล (ResultPattern.csv) ยังได้ดาวน์โหลดไปยังโฟลเดอร์ Downloads ของท่าน\n\n✓ Data sent to Google Sheets successfully!\n\nFile (ResultPattern.csv) also downloaded to your Downloads folder.');
-        } else {
-          alert('⚠️ เกิดข้อผิดพลาดในการส่งไปยัง Google Sheets: ' + (result.error || 'Unknown error') + '\n\nแต่ CSV ถูกดาวน์โหลดเรียบร้อยแล้ว');
-        }
-      })
-      .catch(error => {
-        console.error('Error sending to Google Sheets:', error);
-        alert('⚠️ ข้อผิดพลาดในการส่งไปยัง Google Sheets: ' + error.message + '\n\nแต่ CSV ถูกดาวน์โหลดเรียบร้อยแล้ว');
-      });
     }
   });
 
@@ -437,17 +400,17 @@
         <p>แบบทดสอบมีทั้งหมด <strong>44 ข้อ</strong></p>
         <p>ในแต่ละข้อ จะมีเสียงเดียวเล่น และให้คุณเลือกคำตอบเดียวจากห้าตัวเลือก</p>
         <p>ระบบจะสุ่มลำดับตัวเลือกในแต่ละข้อ</p>
-        <p style="color: #ffcc00; margin-top: 15px;"><strong>⏱️ โปรดทำข้อทดสอบให้เร็วที่สุด</strong> (ไม่มีเวลาจำกัด แต่ให้ตอบตามความเร็วธรรมชาติของคุณ)</p>
+        <p style="color: #ffcc00; margin-top: 15px;">ไม่มีการจำกัดเวลา ขอให้ท่านตอบตามเสียงที่ท่านได้ยินเป็นลำดับแรก</p>
         
         <h3 style="color: #aaa; margin-top: 25px;">【日本語】</h3>
         <p>これは日本語音声聴覚調査です。</p>
         <p>調査は全部で <strong>44 問</strong>あります。</p>
         <p>各問題に1つの音声が再生され、5つの選択肢から1つの答えを選択してください。</p>
         <p>各問題で選択肢の順序はランダムに変更されます。</p>
-        <p style="color: #ffcc00; margin-top: 15px;"><strong>⏱️ テストはできるだけ速く完了してください</strong>（時間制限はありませんが、自然なスピードでお答えください）</p>
+        <p style="color: #ffcc00; margin-top: 15px;">回答に時間制限はありません。直感的に一番初めに聞こえた音をお選びください。</p>
       </div>
     `,
-    choices: ['เริ่มต้น / 開始'],
+    choices: ['เริ่มต้นการทดสอบ/調査開始'],
     button_html: '<button class="jspsych-btn" style="min-width: 150px; padding: 10px 20px; font-size: 16px;">%choice%</button>'
   };
   // เพิ่มแบบสอบถามก่อนคำแนะนำ/การทดลอง (เรียงตามไฟล์แนบ)
