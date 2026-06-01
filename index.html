@@ -147,15 +147,66 @@
       resultRow['Total Yo-on Score'] = totalYoOn;
       resultRow['Average Response Time (ms)'] = countRT > 0 ? Math.round(totalRT / countRT) : 0;
 
+      // ===================== สร้าง Summary Sheet Data (1 row) =====================
+      const summaryData = [{
+        email: email,
+        study_year: studyYear,
+        study_month: studyMonth,
+        stay_year: stayYear,
+        stay_month: stayMonth,
+        pron_experience: pronExperience,
+        institution: institution,
+        tan_on_score: totalTanOn,
+        yo_on_score: totalYoOn,
+        average_response_time: countRT > 0 ? Math.round(totalRT / countRT) : 0,
+        total_correct: totalTanOn + totalYoOn,
+        timestamp: new Date().toISOString()
+      }];
+
+      // ===================== สร้าง Per-Stimulus Sheet Data (44 rows) =====================
+      const perStimData = [];
+      stimulusOrder.forEach((stim, index) => {
+        const trial = trialMap[stim];
+        const correct = trial && (trial.correct === true || trial.correct === 'true');
+        const chosenChoice = trial?.chosen_choice || '';
+        const rt = trial?.rt || 0;
+
+        let resultStr = '';
+        if (correct) {
+          resultStr = 'T';
+        } else {
+          if (chosenChoice && chosenChoice.includes('他')) {
+            const otherTrial = allData.find(d =>
+              d.task === 'other_text' &&
+              Math.abs((d.time_elapsed || 0) - (trial?.time_elapsed || 0)) < 15000
+            );
+            const otherText = otherTrial?.other_sound || chosenChoice;
+            resultStr = `F(他-${otherText})`;
+          } else {
+            resultStr = `F(${chosenChoice})`;
+          }
+        }
+
+        perStimData.push({
+          stimulus_order: index + 1,
+          stimulus: stim,
+          result: resultStr,
+          correct: correct ? 'T' : 'F',
+          response: chosenChoice,
+          correct_response: trial?.correct_response || '',
+          response_time_ms: rt,
+          is_tan_on: tanOnList.includes(stim) ? 'Yes' : 'No'
+        });
+      });
+
       // ===================== ส่งข้อมูลไปยัง Google Sheets =====================
       const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzoWL_Z39qNRGM5JCH5Aw2-Zh6PQNSXDvlL_quRq9HvPJ438F_G9_GCQOCqxwgONY5tGw/exec';
       
-      // สร้าง payload พร้อม resultRow (ซึ่งมี 44 Result และ RT columns)
+      // สร้าง payload ตามรูปแบบเก่า (raw, summary, perStim)
       const payload = {
-        action: 'appendRow',
-        sheetId: '1kmambkSB2os6UGpYd7PHZqyH8tmkJE4BvSWyjGzQQw0',
-        values: Object.values(resultRow),
-        headers: Object.keys(resultRow)
+        raw: allData,
+        summary: summaryData,
+        perStim: perStimData
       };
 
       fetch(GOOGLE_SCRIPT_URL, {
