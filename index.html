@@ -466,10 +466,13 @@ ${detailedRows.map((row, idx) => {
     },
     on_finish: function(data) {
       const choiceIndex = data.response;
-      let selectedChoice = data.button_pressed;
-      if (selectedChoice === null && data.shuffled_choices && typeof choiceIndex === 'number') {
+      let selectedChoice = null;
+      
+      // ดึง choice จาก shuffled_choices array โดยใช้ response index
+      if (typeof choiceIndex === 'number' && data.shuffled_choices && data.shuffled_choices[choiceIndex]) {
         selectedChoice = data.shuffled_choices[choiceIndex];
       }
+      
       data.chosen_choice = selectedChoice;
       data.correct = selectedChoice === data.correct_response;
     }
