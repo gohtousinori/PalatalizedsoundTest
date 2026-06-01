@@ -27,25 +27,26 @@
       const allData = jsPsych.data.get().values();
       const responseRows = allData.filter(r => r.task === 'response');
       
-      // ===================== ลำดับเสียง 44 ข้อ =====================
+      // ===================== ลำดับเสียง 44 ข้อ (ตามที่ user ระบุ) =====================
       const stimulusOrder = [
-        'し', 'ち', 'ひ', 'に', 'ぎ', 'じ', 'き', 'り', 'み', 'び', 'ぴ',
-        'きゃ', 'きゅ', 'きょ', 'ぎゃ', 'ぎゅ', 'ぎょ', 'しゃ', 'しゅ', 'しょ', 'じゃ', 'じゅ', 'じょ',
-        'ちゃ', 'ちゅ', 'ちょ', 'にゃ', 'にゅ', 'にょ', 'ひゃ', 'ひゅ', 'ひょ', 'ぴゃ', 'ぴゅ', 'ぴょ',
-        'びゃ', 'びゅ', 'びょ', 'みゃ', 'みゅ', 'みょ', 'りゃ', 'りゅ', 'りょ'
+        'し','ち','ひ','に','ぎ','じ','き','り','み','び','ぴ',
+        'きゃ','きゅ','きょ','ぎゃ','ぎゅ','ぎょ',
+        'しゃ','しゅ','しょ','じゃ','じゅ','じょ',
+        'ちゃ','ちゅ','ちょ','にゃ','にゅ','にょ',
+        'ひゃ','ひゅ','ひょ','ぴゃ','ぴゅ','ぴょ',
+        'びゃ','びゅ','びょ','みゃ','みゅ','みょ',
+        'りゃ','りゅ','りょ'
       ];
       
-      const tanOnStimuli = ['し', 'ち', 'ひ', 'に', 'ぎ', 'じ', 'き', 'り', 'み', 'び', 'ぴ'];
+      const tanOnList = ['し','ち','ひ','に','ぎ','じ','き','り','み','び','ぴ'];
       
-      // ===================== ดึงข้อมูลส่วนบุคคล =====================
+      // ===================== ดึงข้อมูลพื้นฐาน =====================
       const preFormData = allData.find(r => r.task === 'pre_survey_form') || {};
-      const studyYear = preFormData.study_year || 'n/a';
-      const studyMonth = preFormData.study_month || 'n/a';
-      const stayYear = preFormData.stay_year || 'n/a';
-      const stayMonth = preFormData.stay_month || 'n/a';
-      const email = preFormData.email || 'n/a';
+      const studyYear = preFormData.study_year || '';
+      const studyMonth = preFormData.study_month || '';
+      const stayYear = preFormData.stay_year || '';
+      const stayMonth = preFormData.stay_month || '';
       
-      // ===================== ดึงข้อมูลประสบการณ์การเรียน =====================
       const preChoiceData = allData.find(r => r.task === 'pre_survey_choice') || {};
       let pronExperience = '';
       if (preChoiceData.response) {
@@ -61,103 +62,139 @@
           pronExperience = resp;
         }
       }
+      
+      const preInstData = allData.find(r => r.task === 'pre_survey_institution') || {};
+      let institution = '';
+      if (preInstData.response) {
+        let resp = preInstData.response;
+        if (typeof resp === 'string') {
+          try { resp = JSON.parse(resp); } catch(e) {}
+        }
+        if (resp && typeof resp === 'object') {
+          institution = resp.institution || '';
+        } else {
+          institution = resp || '';
+        }
+      }
 
-      // ===================== นับจำนวนคนที่ตอบ (Respondent ID) =====================
-      // ใช้ timestamp เพื่อสร้าง unique ID เล็กน้อย
-      const respondentId = String(Math.floor(Date.now() / 1000) % 1000).padStart(3, '0');
+      // ===================== สร้าง map สำหรับ stimulus -> trial data =====================
+      const trialMap = {};
+      responseRows.forEach(d => {
+        trialMap[d.stimulus] = d;
+      });
 
-      // ===================== คำนวณ tan-on vs yo-on =====================
-      const tanOnResponses = responseRows.filter(r => tanOnStimuli.includes(r.stimulus || ''));
-      const tanOnCorrect = tanOnResponses.filter(r => r.correct === true || r.correct === 'true').length;
-      const yoOnResponses = responseRows.filter(r => !tanOnStimuli.includes(r.stimulus || ''));
-      const yoOnCorrect = yoOnResponses.filter(r => r.correct === true || r.correct === 'true').length;
-
-      // ===================== สร้าง Summary Row แรก =====================
-      const summaryRow = {
-        respondent_id: respondentId,
-        study_year: studyYear,
-        study_month: studyMonth,
-        stay_year: stayYear,
-        stay_month: stayMonth,
-        pron_experience: pronExperience,
-        tan_on_correct: tanOnCorrect,
-        yo_on_correct: yoOnCorrect
+      // ===================== สร้าง result row (1 row ต่อ 1 participant) =====================
+      const resultRow = {
+        'ระยะเวลาการเรียนภาษาญี่ปุ่นรวม (ปี)': studyYear,
+        'ระยะเวลาการเรียนภาษาญี่ปุ่นรวม (เดือน)': studyMonth,
+        'ระยะเวลาการพำนักที่ญี่ปุ่นรวม (ปี)': stayYear,
+        'ระยะเวลาการพำนักที่ญี่ปุ่นรวม (เดือน)': stayMonth,
+        'ประสบการณ์การเรียนการออกเสียง': pronExperience,
+        'สถาบัน': institution,
       };
 
-      // ===================== สร้าง Detailed Rows (44 ข้อ เรียงตามลำดับ) =====================
-      const detailedRows = [];
-      stimulusOrder.forEach((stim, index) => {
-        const response = responseRows.find(r => r.stimulus === stim);
-        if (response) {
-          detailedRows.push({
-            respondent_id: respondentId,
-            stimulus_order: index + 1,
-            stimulus: stim,
-            correct_response: response.correct_response,
-            response: response.chosen_choice || 'n/a',
-            is_correct: response.correct === true || response.correct === 'true' ? 'TRUE' : 'FALSE',
-            reaction_time_ms: response.rt || 'n/a'
-          });
+      let totalTanOn = 0;
+      let totalYoOn = 0;
+      let totalRT = 0;
+      let countRT = 0;
+
+      // ===================== สร้างคอลัมน์ Result และ RT สำหรับแต่ละ stimulus =====================
+      stimulusOrder.forEach(stim => {
+        const trial = trialMap[stim];
+        if (!trial) {
+          resultRow[`Result_${stim}`] = '';
+          resultRow[`RT_${stim}`] = '';
+          return;
+        }
+
+        const correct = trial.correct === true || trial.correct === 'true';
+        const chosenChoice = trial.chosen_choice || '';
+        const rt = trial.rt || 0;
+
+        let resultStr;
+        if (correct) {
+          resultStr = 'T';
+          if (tanOnList.includes(stim)) totalTanOn++;
+          else totalYoOn++;
+        } else {
+          // ถ้าตอบผิด ให้ดึง "other_sound" จาก other_text trial ที่ใกล้เคียง
+          let otherText = '';
+          if (chosenChoice && chosenChoice.includes('他')) {
+            const otherTrial = allData.find(d =>
+              d.task === 'other_text' &&
+              Math.abs((d.time_elapsed || 0) - (trial.time_elapsed || 0)) < 15000
+            );
+            otherText = otherTrial && otherTrial.other_sound ? otherTrial.other_sound : chosenChoice;
+            resultStr = `F(他-${otherText})`;
+          } else {
+            resultStr = `F(${chosenChoice})`;
+          }
+        }
+
+        resultRow[`Result_${stim}`] = resultStr;
+        resultRow[`RT_${stim}`] = rt;
+
+        if (rt > 0) {
+          totalRT += rt;
+          countRT++;
         }
       });
 
+      // ===================== เพิ่มสรุป Total Scores =====================
+      resultRow['Total Tan-on Score'] = totalTanOn;
+      resultRow['Total Yo-on Score'] = totalYoOn;
+      resultRow['Average Response Time (ms)'] = countRT > 0 ? Math.round(totalRT / countRT) : 0;
+
+      // ===================== Download CSV =====================
+      const headers = Object.keys(resultRow);
+      const csvRows = [
+        headers.map(h => `"${h}"`).join(','),
+        headers.map(h => {
+          const value = resultRow[h];
+          return `"${value !== null && value !== undefined ? String(value).replace(/"/g, '""') : ''}"`;
+        }).join(',')
+      ];
+      const csvContent = '\uFEFF' + csvRows.join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'ResultPattern.csv');
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
       // ===================== แสดงผลในหน้าจอ =====================
+      const tanOnCorrect = responseRows.filter(r => tanOnList.includes(r.stimulus) && (r.correct === true || r.correct === 'true')).length;
+      const yoOnCorrect = responseRows.filter(r => !tanOnList.includes(r.stimulus) && (r.correct === true || r.correct === 'true')).length;
+      
       const displayText = `
 ════════════════════════════════════════════════════════
                     ผลการทดสอบ / テスト結果
 ════════════════════════════════════════════════════════
 
-【ข้อมูลผู้ตอบ】
-- ID: ${respondentId}
+【ข้อมูลพื้นฐาน】
 - ปีเรียนญี่ปุ่น: ${studyYear}
 - เดือนเรียนญี่ปุ่น: ${studyMonth}
 - ปีอาศัยญี่ปุ่น: ${stayYear}
 - เดือนอาศัยญี่ปุ่น: ${stayMonth}
+- ประสบการณ์การเรียนการออกเสียง: ${pronExperience}
+- สถาบัน: ${institution}
 
 【ผลสรุป】
 - ตอบถูก Tan-on (単音): ${tanOnCorrect}/11
 - ตอบถูก Yo-on (拗音): ${yoOnCorrect}/33
 - รวมตอบถูก: ${tanOnCorrect + yoOnCorrect}/44
 
-【รายละเอียด 44 ข้อ】
-${detailedRows.map((row, idx) => {
-  const isCorrectStr = row.is_correct === 'TRUE' ? '✓' : '✗';
-  return `${(idx + 1).toString().padStart(2, '0')}. ${row.stimulus} → ${row.response} [${row.correct_response}] ${isCorrectStr}`;
-}).join('\n')}
-
 ════════════════════════════════════════════════════════
-      ข้อมูลถูกส่งไปยัง Google Sheets แล้ว
+       ข้อมูลถูกส่งออกเป็น CSV ไฟล์ ResultPattern.csv
 ════════════════════════════════════════════════════════
 `;
       
       console.log(displayText);
-
-      // ===================== ส่งข้อมูลไปยัง Google Apps Script =====================
-      const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzoWL_Z39qNRGM5JCH5Aw2-Zh6PQNSXDvlL_quRq9HvPJ438F_G9_GCQOCqxwgONY5tGw/exec';
-      const payload = {
-        respondent_id: respondentId,
-        summary: summaryRow,
-        detailed: detailedRows,
-        raw: allData,
-        sheetId: '1kmambkSB2os6UGpYd7PHZqyH8tmkJE4BvSWyjGzQQw0'
-      };
-
-      fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      })
-      .then(response => response.json())
-      .then(result => {
-        if (result.success) {
-          alert('ข้อมูลถูกส่งไปยัง Google Sheets เรียบร้อยแล้ว!\nID: ' + respondentId + '\nData successfully sent to Google Sheets!');
-        } else {
-          alert('เกิดข้อผิดพลาด: ' + result.error);
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        alert('เกิดข้อผิดพลาดในการส่งข้อมูล: ' + error.message);
-      });
+      alert('✓ ข้อมูลของท่านถูกประมวลผลและส่งออกเรียบร้อยแล้ว!\n\nข้อมูล (ResultPattern.csv) ถูกดาวน์โหลดไปยังโฟลเดอร์ Downloads ของท่าน\n\n✓ Your data has been successfully processed and exported!\n\nData (ResultPattern.csv) has been downloaded to your Downloads folder.');
     }
   });
 
@@ -464,6 +501,7 @@ ${detailedRows.map((row, idx) => {
     button_html: '<button class="jspsych-btn" style="min-width: 120px; margin: 8px;">%choice%</button>',
     data: {
       task: 'response',
+      stimulus: jsPsych.timelineVariable('stimulus'),
       correct_response: jsPsych.timelineVariable('correct_response')
     },
     on_start: function(trial) {
