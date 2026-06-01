@@ -20,45 +20,119 @@
 <body></body>
 <script>
   // ========================================
-  // ขั้นตอนที่ 1: เริ่มต้น jsPsych และตั้งค่าการดาวน์โหลดผลการทดลอง
+  // ขั้นตอนที่ 1: เริ่มต้น jsPsych และตั้งค่าการส่งผลการทดลองไปยัง Google Sheets
   // ========================================
   const jsPsych = initJsPsych({
     on_finish: function() {
-      // สร้าง workbook จากข้อมูลทั้งหมด และเพิ่ม sheet สำหรับสรุปผล
       const allData = jsPsych.data.get().values();
 
-      // คัดเฉพาะ trial ตอบคำถามเพื่อคำนวณสถิติ
-      const responseRows = allData.filter(r => r.task === 'response' || r.trial_type === 'html-button-response');
-      const total = responseRows.length;
-      const correctCount = responseRows.filter(r => r.correct === true || r.correct === 'true').length;
-      const accuracy = total > 0 ? (correctCount / total) * 100 : 0;
-      const rts = responseRows.map(r => Number(r.rt)).filter(x => !isNaN(x));
-      const meanRT = rts.length ? Math.round((rts.reduce((a, b) => a + b, 0) / rts.length) * 100) / 100 : '';
+      // ===================== คัดเฉพาะ response trials =====================
+      const responseRows = allData.filter(r => r.task === 'response');
+      
+      // ===================== แยก tan-on กับ yo-on =====================
+      const tanOnStimuli = ['し', 'ち', 'ひ', 'に', 'ぎ', 'じ', 'き', 'り', 'み', 'び', 'ぴ'];
+      const yoOnStimuli = ['きゃ', 'きゅ', 'きょ', 'ぎゃ', 'ぎゅ', 'ぎょ', 'しゃ', 'しゅ', 'しょ', 'じゃ', 'じゅ', 'じょ', 'ちゃ', 'ちゅ', 'ちょ', 'にゃ', 'にゅ', 'にょ', 'ひゃ', 'ひゅ', 'ひょ', 'ぴゃ', 'ぴゅ', 'ぴょ', 'びゃ', 'びゅ', 'びょ', 'みゃ', 'みゅ', 'みょ', 'りゃ', 'りゅ', 'りょ'];
+      
+      const tanOnResponses = responseRows.filter(r => tanOnStimuli.includes(r.stimulus || ''));
+      const yoOnResponses = responseRows.filter(r => yoOnStimuli.includes(r.stimulus || ''));
 
-      // per-stimulus accuracy
-      const byStim = {};
-      responseRows.forEach(r => {
-        const s = typeof r.stimulus === 'string' ? r.stimulus : (r.stim || '');
-        if (!byStim[s]) byStim[s] = { n: 0, correct: 0 };
-        byStim[s].n++;
-        if (r.correct === true || r.correct === 'true') byStim[s].correct++;
-      });
-      const perStim = Object.keys(byStim).map(k => ({ stimulus: k, n: byStim[k].n, correct: byStim[k].correct, accuracy: Math.round((byStim[k].correct / byStim[k].n) * 10000) / 100 }));
+      // ===================== คำนวณสถิติ =====================
+      const totalCorrect = responseRows.filter(r => r.correct === true || r.correct === 'true').length;
+      const totalIncorrect = responseRows.length - totalCorrect;
+      
+      const tanOnCorrect = tanOnResponses.filter(r => r.correct === true || r.correct === 'true').length;
+      const tanOnTotal = tanOnResponses.length;
+      const tanOnAccuracy = tanOnTotal > 0 ? Math.round((tanOnCorrect / tanOnTotal) * 100) : 0;
+      
+      const yoOnCorrect = yoOnResponses.filter(r => r.correct === true || r.correct === 'true').length;
+      const yoOnTotal = yoOnResponses.length;
+      const yoOnAccuracy = yoOnTotal > 0 ? Math.round((yoOnCorrect / yoOnTotal) * 100) : 0;
 
-      const summaryRows = [
-        { metric: 'total_response_trials', value: total },
-        { metric: 'correct_count', value: correctCount },
-        { metric: 'accuracy_percent', value: Math.round(accuracy * 100) / 100 },
-        { metric: 'mean_rt_ms', value: meanRT },
-        { metric: 'other_count', value: allData.filter(r => r.task === 'other_text' || r.trial_type === 'survey-text').length }
+      // ===================== Response Time (ms) =====================
+      const allRts = responseRows.map(r => Number(r.rt)).filter(x => !isNaN(x));
+      const meanRtAll = allRts.length ? Math.round(allRts.reduce((a, b) => a + b, 0) / allRts.length) : 0;
+      
+      const tanOnRts = tanOnResponses.map(r => Number(r.rt)).filter(x => !isNaN(x));
+      const meanRtTanOn = tanOnRts.length ? Math.round(tanOnRts.reduce((a, b) => a + b, 0) / tanOnRts.length) : 0;
+      
+      const yoOnRts = yoOnResponses.map(r => Number(r.rt)).filter(x => !isNaN(x));
+      const meanRtYoOn = yoOnRts.length ? Math.round(yoOnRts.reduce((a, b) => a + b, 0) / yoOnRts.length) : 0;
+
+      // ===================== ดึงข้อมูลส่วนบุคคล =====================
+      const preFormData = allData.find(r => r.task === 'pre_survey_form') || {};
+      const studyYear = preFormData.study_year || 'n/a';
+      const studyMonth = preFormData.study_month || 'n/a';
+      const stayYear = preFormData.stay_year || 'n/a';
+      const stayMonth = preFormData.stay_month || 'n/a';
+      const email = preFormData.email || 'n/a';
+
+      // ===================== สรุปผล - แสดงใน console =====================
+      const summary = `
+════════════════════════════════════════════════════════
+                    ผลการทดสอบ / テスト結果
+════════════════════════════════════════════════════════
+
+【ข้อมูลส่วนบุคคล / 個人情報】
+1. เสียงที่ตอบถูก: ${totalCorrect}/44
+3. เสียงที่ตอบผิด: ${totalIncorrect}/44
+6. Response Time (เฉลี่ย): ${meanRtAll} ms
+
+7. ปีที่เรียนภาษาญี่ปุ่น: ${studyYear}
+8. เดือนที่เรียนภาษาญี่ปุ่น: ${studyMonth}
+10. ปีที่อาศัยในญี่ปุ่น: ${stayYear}
+11. เดือนที่อาศัยในญี่ปุ่น: ${stayMonth}
+12. Email: ${email}
+
+════════════════════════════════════════════════════════
+【สรุปผล / サマリー】
+════════════════════════════════════════════════════════
+
+📊 รวมทั้งหมด:
+   • ตอบถูก: ${totalCorrect}/44 (${Math.round((totalCorrect/44)*100)}%)
+   • ตอบผิด: ${totalIncorrect}/44 (${Math.round((totalIncorrect/44)*100)}%)
+   • เวลาเฉลี่ย: ${meanRtAll} ms
+
+📊 単音 (Tan-on) - 11 ข้อ:
+   • ตอบถูก: ${tanOnCorrect}/${tanOnTotal} (${tanOnAccuracy}%)
+   • เวลาเฉลี่ย: ${meanRtTanOn} ms
+
+📊 拗音 (Yo-on) - 33 ข้อ:
+   • ตอบถูก: ${yoOnCorrect}/${yoOnTotal} (${yoOnAccuracy}%)
+   • เวลาเฉลี่ย: ${meanRtYoOn} ms
+
+════════════════════════════════════════════════════════
+      ข้อมูลถูกส่งไปยัง Google Sheets แล้ว
+════════════════════════════════════════════════════════
+`;
+      
+      console.log(summary);
+
+      // ===================== เตรียมข้อมูลสำหรับ Google Sheet =====================
+      // สร้าง payload รายละเอียด
+      const detailedSummary = [];
+      detailedSummary.push({ row: 1, label: 'เสียงที่ตอบถูก', value: totalCorrect });
+      detailedSummary.push({ row: 3, label: 'เสียงที่ตอบผิด', value: totalIncorrect });
+      detailedSummary.push({ row: 6, label: 'Response Time เฉลี่ย (ms)', value: meanRtAll });
+      detailedSummary.push({ row: 7, label: 'ปีที่เรียนญี่ปุ่น', value: studyYear });
+      detailedSummary.push({ row: 8, label: 'เดือนที่เรียนญี่ปุ่น', value: studyMonth });
+      detailedSummary.push({ row: 10, label: 'ปีที่อาศัยญี่ปุ่น', value: stayYear });
+      detailedSummary.push({ row: 11, label: 'เดือนที่อาศัยญี่ปุ่น', value: stayMonth });
+      detailedSummary.push({ row: 12, label: 'Email', value: email });
+
+      const bottomSummary = [
+        { label: 'Average RT (All)', value: meanRtAll },
+        { label: 'Tan-on (単音) - Accuracy', value: `${tanOnAccuracy}% (${tanOnCorrect}/${tanOnTotal})` },
+        { label: 'Tan-on (単音) - Average RT', value: `${meanRtTanOn} ms` },
+        { label: 'Yo-on (拗音) - Accuracy', value: `${yoOnAccuracy}% (${yoOnCorrect}/${yoOnTotal})` },
+        { label: 'Yo-on (拗音) - Average RT', value: `${meanRtYoOn} ms` }
       ];
 
       // ส่งข้อมูลไปยัง Google Apps Script
       const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzoWL_Z39qNRGM5JCH5Aw2-Zh6PQNSXDvlL_quRq9HvPJ438F_G9_GCQOCqxwgONY5tGw/exec';
       const payload = {
         raw: allData,
-        summary: summaryRows,
-        perStim: perStim,
+        detailedSummary: detailedSummary,
+        bottomSummary: bottomSummary,
         sheetId: '1kmambkSB2os6UGpYd7PHZqyH8tmkJE4BvSWyjGzQQw0'
       };
 
@@ -128,7 +202,7 @@
   // หน้าแสดงเมื่อผู้เข้าร่วมไม่ยินยอม
   // ========================================
   const consentRefusal = {
-    type: jsPsychHtmlKeyboardResponse,
+    type: jsPsychHtmlButtonResponse,
     stimulus: `
       <div style="text-align: center; padding: 30px 20px;">
         <h1 style="font-size: 24px; margin: 0 0 20px 0; color: #ff6b6b;">
@@ -146,8 +220,8 @@
         </div>
       </div>
     `,
-    choices: 'NO_KEYS',
-    trial_duration: 999999999
+    choices: ['ตกลง / 了解'],
+    button_html: '<button class="jspsych-btn" style="min-width: 150px; padding: 10px 20px; font-size: 16px;">%choice%</button>'
   };
 
   // ========================================
@@ -264,15 +338,16 @@
   // แสดงรายละเอียดของการทดลอง (44 ข้อ)
   // ========================================
   const instructions = {
-    type: jsPsychHtmlKeyboardResponse,
+    type: jsPsychHtmlButtonResponse,
     stimulus: `
       <h2>ยินดีต้อนรับ</h2>
       <p>นี่คือการทดสอบการแยกแยะเสียง</p>
       <p>แบบทดสอบมีทั้งหมด 44 ข้อ</p>
       <p>ในแต่ละข้อ จะมีเสียงเดียวเล่น และให้คุณเลือกคำตอบเดียวจากห้า</p>
       <p>ระบบจะสุ่มลำดับตัวเลือกในแต่ละข้อ</p>
-      <p>กดปุ่มใดก็ได้เพื่อเริ่ม</p>
-    `
+    `,
+    choices: ['เริ่มต้น'],
+    button_html: '<button class="jspsych-btn" style="min-width: 150px; padding: 10px 20px; font-size: 16px;">%choice%</button>'
   };
   // เพิ่มแบบสอบถามก่อนคำแนะนำ/การทดลอง (เรียงตามไฟล์แนบ)
   timeline.push(titleAndNotice); // ชื่องานวิจัยและหมายเหตุ
@@ -361,18 +436,18 @@
   ];
 
   const fixation = {
-    type: jsPsychHtmlKeyboardResponse,
+    type: jsPsychHtmlButtonResponse,
     stimulus: '<div style="font-size: 72px;">+</div>',
-    choices: 'NO_KEYS',
+    choices: [],
     trial_duration: 500
   };
 
   const audioPlaceholder = {
-    type: jsPsychHtmlKeyboardResponse,
+    type: jsPsychHtmlButtonResponse,
     stimulus: function() {
       return `<p>Placeholder สำหรับเสียง:</p><p style="font-size: 64px; margin: 24px 0;">${jsPsych.timelineVariable('stimulus')}</p>`;
     },
-    choices: 'NO_KEYS',
+    choices: [],
     trial_duration: 1000
   };
 
@@ -404,7 +479,7 @@
     on_finish: function(data) {
       const choiceIndex = data.response;
       let selectedChoice = data.button_pressed;
-      if (!selectedChoice && data.shuffled_choices && typeof choiceIndex === 'number') {
+      if (selectedChoice === null && data.shuffled_choices && typeof choiceIndex === 'number') {
         selectedChoice = data.shuffled_choices[choiceIndex];
       }
       data.chosen_choice = selectedChoice;
@@ -416,9 +491,9 @@
     type: jsPsychSurveyText,
     questions: [
       {
-        prompt: 'กรุณาพิมพ์เสียงอื่นที่คุณได้ยิน',
+        prompt: '<div style="margin-bottom: 15px;"><strong>ใส่เสียงที่ท่านได้ยินลงด้านล่างเป็นตัวอักษรโรมาจิ</strong><br/><strong style="display:block; margin-top:8px;">下記に聞こえた音をローマ字で入力してください</strong><br/><span style="color: #aaa; font-size: 14px;">เช่น di, ti, fi, ri เป็นต้น</span><br/><span style="color: #aaa; font-size: 14px;">例：di, ti, fi, ri など</span></div>',
         name: 'other_sound',
-        placeholder: 'พิมพ์เสียงอื่นที่ได้ยิน',
+        placeholder: 'พิมพ์เสียงโรมาจิ / ローマ字を入力',
         required: true
       }
     ],
@@ -457,8 +532,10 @@
   timeline.push(trialProcedure);
 
   const debrief = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: '<p>"ผู้วิจัยขอขอบพระคุณในความอนุเคราะห์และความเสียสละเวลาของท่านเป็นอย่างยิ่ง ข้อมูลของท่านเป็นประโยชน์อย่างยิ่งต่องานวิจัยชิ้นนี้ ขออวยพรให้ท่านประสบความสำเร็จในหน้าที่การงานและมีสุขภาพพลานามัยที่แข็งแรงสมบูรณ์"</p>'
+    type: jsPsychHtmlButtonResponse,
+    stimulus: '<p>"ผู้วิจัยขอขอบพระคุณในความอนุเคราะห์และความเสียสละเวลาของท่านเป็นอย่างยิ่ง ข้อมูลของท่านเป็นประโยชน์อย่างยิ่งต่องานวิจัยชิ้นนี้ ขออวยพรให้ท่านประสบความสำเร็จในหน้าที่การงานและมีสุขภาพพลานามัยที่แข็งแรงสมบูรณ์"</p><p style="margin-top: 20px; color: #999;">「ご協力いただき、ありがとうございました。皆様の貴重なご意見は、本研究の遂行に大変役立たせていただきます。皆様のますますのご活躍とご健康をお祈りしております。」</p>',
+    choices: ['ขอบคุณ / ありがとうございました'],
+    button_html: '<button class="jspsych-btn" style="min-width: 180px; padding: 10px 20px; font-size: 16px;">%choice%</button>'
   };
   timeline.push(debrief);
 
