@@ -172,6 +172,7 @@
         const rt = trial?.rt || 0;
 
         let resultStr = '';
+        let otherSound = '';
         if (correct) {
           resultStr = 'T';
         } else {
@@ -180,8 +181,8 @@
               d.task === 'other_text' &&
               Math.abs((d.time_elapsed || 0) - (trial?.time_elapsed || 0)) < 15000
             );
-            const otherText = otherTrial?.other_sound || chosenChoice;
-            resultStr = `F(他-${otherText})`;
+            otherSound = otherTrial?.other_sound || '';
+            resultStr = `F(他-${otherSound})`;
           } else {
             resultStr = `F(${chosenChoice})`;
           }
@@ -193,6 +194,7 @@
           result: resultStr,
           correct: correct ? 'T' : 'F',
           response: chosenChoice,
+          other_sound: otherSound,
           correct_response: trial?.correct_response || '',
           response_time_ms: rt,
           is_tan_on: tanOnList.includes(stim) ? 'Yes' : 'No'
@@ -202,11 +204,12 @@
       // ===================== ส่งข้อมูลไปยัง Google Sheets =====================
       const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzoWL_Z39qNRGM5JCH5Aw2-Zh6PQNSXDvlL_quRq9HvPJ438F_G9_GCQOCqxwgONY5tGw/exec';
       
-      // สร้าง payload ตามรูปแบบเก่า (raw, summary, perStim)
+      // สร้าง payload ตามรูปแบบ ResultPattern (1 row per participant)
+      // รวม 44 Result_[stimulus] + 44 RT_[stimulus] + summary columns
       const payload = {
-        raw: allData,
-        summary: summaryData,
-        perStim: perStimData
+        sheetId: '1kmambkSB2os6UGpYd7PHZqyH8tmkJE4BvSWyjGzQQw0',
+        headers: Object.keys(resultRow),
+        values: Object.values(resultRow)
       };
 
       fetch(GOOGLE_SCRIPT_URL, {
@@ -287,7 +290,7 @@
           ข้อมูลของท่านจะถูกใช้ในงานวิจัยนี้ และจะถูกนำเสนอในที่ประชุมทางวิชาการ<br>
           <br>
           <strong>ご質問やお問い合わせ / ติดต่อสอบถามผู้วิจัย:</strong><br>
-          070-9192-6459 / u548378a@ecs.osaka-u.ac.jp<br>
+          Tel. 070-9192-6459 / E-Mail u548378a@ecs.osaka-u.ac.jp<br>
           ケハナン アカラポン (Akarapong Kehanan)<br>
           大阪大学大学院 人文学研究科 博士後期課程
         </div>
