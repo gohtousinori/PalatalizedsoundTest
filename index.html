@@ -20,6 +20,24 @@
 <body></body>
 <script>
   // ========================================
+  // Mapping: stimulus (kana) -> audio filename (romaji, no extension)
+  // ========================================
+  const stimulusToRomaji = {
+    'し':'shi', 'ち':'chi', 'ひ':'hi', 'に':'ni', 'ぎ':'gi', 'じ':'ji', 'き':'ki', 'り':'ri', 'み':'mi', 'び':'bi', 'ぴ':'pi',
+    'きゃ':'kya', 'きゅ':'kyu', 'きょ':'kyo',
+    'ぎゃ':'gya', 'ぎゅ':'gyu', 'ぎょ':'gyo',
+    'しゃ':'sha', 'しゅ':'shu', 'しょ':'sho',
+    'じゃ':'ja', 'じゅ':'ju', 'じょ':'jo',
+    'ちゃ':'cha', 'ちゅ':'chu', 'ちょ':'cho',
+    'にゃ':'nya', 'にゅ':'nyu', 'にょ':'nyo',
+    'ひゃ':'hya', 'ひゅ':'hyu', 'ひょ':'hyo',
+    'ぴゃ':'pya', 'ぴゅ':'pyu', 'ぴょ':'pyo',
+    'びゃ':'bya', 'びゅ':'byu', 'びょ':'byo',
+    'みゃ':'mya', 'みゅ':'myu', 'みょ':'myo',
+    'りゃ':'rya', 'りゅ':'ryu', 'りょ':'ryo'
+  };
+
+  // ========================================
   // ขั้นตอนที่ 1: เริ่มต้น jsPsych และตั้งค่าการส่งผลการทดลองไปยัง Google Sheets
   // ========================================
   const jsPsych = initJsPsych({
@@ -86,7 +104,7 @@
 
       // ===================== สร้าง result row (1 row ต่อ 1 participant) =====================
       const resultRow = {
-        'อีเมล': email,
+        'Email': email,
         'ระยะเวลาการเรียนภาษาญี่ปุ่นรวม (ปี)': studyYear,
         'ระยะเวลาการเรียนภาษาญี่ปุ่นรวม (เดือน)': studyMonth,
         'ระยะเวลาการพำนักที่ญี่ปุ่นรวม (ปี)': stayYear,
@@ -147,87 +165,26 @@
       resultRow['Total Yo-on Score'] = totalYoOn;
       resultRow['Average Response Time (ms)'] = countRT > 0 ? Math.round(totalRT / countRT) : 0;
 
-      // ===================== สร้าง Summary Sheet Data (1 row) =====================
-      const summaryData = [{
-        email: email,
-        study_year: studyYear,
-        study_month: studyMonth,
-        stay_year: stayYear,
-        stay_month: stayMonth,
-        pron_experience: pronExperience,
-        institution: institution,
-        tan_on_score: totalTanOn,
-        yo_on_score: totalYoOn,
-        average_response_time: countRT > 0 ? Math.round(totalRT / countRT) : 0,
-        total_correct: totalTanOn + totalYoOn,
-        timestamp: new Date().toISOString()
-      }];
+      // ===================== Download CSV =====================
+      const headers = Object.keys(resultRow);
+      const csvRows = [
+        headers.map(h => `"${h}"`).join(','),
+        headers.map(h => {
+          const value = resultRow[h];
+          return `"${value !== null && value !== undefined ? String(value).replace(/"/g, '""') : ''}"`;
+        }).join(',')
+      ];
+      const csvContent = '\uFEFF' + csvRows.join('\n');
 
-      // ===================== สร้าง Per-Stimulus Sheet Data (44 rows) =====================
-      const perStimData = [];
-      stimulusOrder.forEach((stim, index) => {
-        const trial = trialMap[stim];
-        const correct = trial && (trial.correct === true || trial.correct === 'true');
-        const chosenChoice = trial?.chosen_choice || '';
-        const rt = trial?.rt || 0;
-
-        let resultStr = '';
-        let otherSound = '';
-        if (correct) {
-          resultStr = 'T';
-        } else {
-          if (chosenChoice && chosenChoice.includes('他')) {
-            const otherTrial = allData.find(d =>
-              d.task === 'other_text' &&
-              Math.abs((d.time_elapsed || 0) - (trial?.time_elapsed || 0)) < 15000
-            );
-            otherSound = otherTrial?.other_sound || '';
-            resultStr = `F(他-${otherSound})`;
-          } else {
-            resultStr = `F(${chosenChoice})`;
-          }
-        }
-
-        perStimData.push({
-          stimulus_order: index + 1,
-          stimulus: stim,
-          result: resultStr,
-          correct: correct ? 'T' : 'F',
-          response: chosenChoice,
-          other_sound: otherSound,
-          correct_response: trial?.correct_response || '',
-          response_time_ms: rt,
-          is_tan_on: tanOnList.includes(stim) ? 'Yes' : 'No'
-        });
-      });
-
-      // ===================== ส่งข้อมูลไปยัง Google Sheets =====================
-      const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxaRjiTRg7bGWEdUaZJcpniKPbo8NoRAs4adOzLDA2C5zUy63eH0ABc2ZnLlcDsE9uVJw/exec';
-      
-      // สร้าง payload ตามรูปแบบ ResultPattern (1 row per participant)
-      // รวม 44 Result_[stimulus] + 44 RT_[stimulus] + summary columns
-      const payload = {
-        sheetId: '1kmambkSB2os6UGpYd7PHZqyH8tmkJE4BvSWyjGzQQw0',
-        headers: Object.keys(resultRow),
-        values: Object.values(resultRow)
-      };
-
-      fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      })
-      .then(response => response.json())
-      .then(result => {
-        if (result.success) {
-          alert('✓ ข้อมูลของท่านถูกส่งไปยัง Google Sheets เรียบร้อยแล้ว!\n\n✓ Your data has been successfully sent to Google Sheets!\n\nThank you for your participation!');
-        } else {
-          alert('⚠️ เกิดข้อผิดพลาดในการส่งข้อมูล\n\nError: ' + (result.error || 'Unknown error'));
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        alert('⚠️ เกิดข้อผิดพลาดในการเชื่อมต่อ\n\nConnection Error: ' + error.message + '\n\nPlease try again or contact the researcher.');
-      });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'ResultPattern.csv');
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
       // ===================== แสดงผลในหน้าจอ =====================
       const tanOnCorrect = responseRows.filter(r => tanOnList.includes(r.stimulus) && (r.correct === true || r.correct === 'true')).length;
@@ -239,7 +196,7 @@
 ════════════════════════════════════════════════════════
 
 【ข้อมูลพื้นฐาน】
-- อีเมล: ${email}
+- Email: ${email}
 - ปีเรียนญี่ปุ่น: ${studyYear}
 - เดือนเรียนญี่ปุ่น: ${studyMonth}
 - ปีอาศัยญี่ปุ่น: ${stayYear}
@@ -253,11 +210,55 @@
 - รวมตอบถูก: ${tanOnCorrect + yoOnCorrect}/44
 
 ════════════════════════════════════════════════════════
-     ข้อมูลกำลังถูกส่งไปยัง Google Sheets...
+      ข้อมูลกำลังส่งไปยัง Google Sheets และดาวน์โหลด...
 ════════════════════════════════════════════════════════
 `;
       
       console.log(displayText);
+
+      // ===================== ส่งข้อมูลไปยัง Google Apps Script =====================
+      const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzoWL_Z39qNRGM5JCH5Aw2-Zh6PQNSXDvlL_quRq9HvPJ438F_G9_GCQOCqxwgONY5tGw/exec';
+      
+      // สร้าง detailed rows สำหรับ Google Sheets
+      const detailedRows = [];
+      stimulusOrder.forEach((stim, index) => {
+        const trial = trialMap[stim];
+        if (trial) {
+          detailedRows.push({
+            Email: email,
+            stimulus_order: index + 1,
+            stimulus: stim,
+            correct_response: trial.correct_response,
+            response: trial.chosen_choice || 'n/a',
+            is_correct: trial.correct === true || trial.correct === 'true' ? 'TRUE' : 'FALSE',
+            reaction_time_ms: trial.rt || 'n/a'
+          });
+        }
+      });
+
+      const payload = {
+        respondent_data: resultRow,
+        detailed_results: detailedRows,
+        sheetId: '1kmambkSB2os6UGpYd7PHZqyH8tmkJE4BvSWyjGzQQw0'
+      };
+
+      fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
+      .then(response => response.json())
+      .then(result => {
+        console.log('Google Sheets response:', result);
+        if (result.success) {
+          alert('✓ ข้อมูลถูกส่งไปยัง Google Sheets เรียบร้อยแล้ว!\n\nข้อมูล (ResultPattern.csv) ยังได้ดาวน์โหลดไปยังโฟลเดอร์ Downloads ของท่าน\n\n✓ Data sent to Google Sheets successfully!\n\nFile (ResultPattern.csv) also downloaded to your Downloads folder.');
+        } else {
+          alert('⚠️ เกิดข้อผิดพลาดในการส่งไปยัง Google Sheets: ' + (result.error || 'Unknown error') + '\n\nแต่ CSV ถูกดาวน์โหลดเรียบร้อยแล้ว');
+        }
+      })
+      .catch(error => {
+        console.error('Error sending to Google Sheets:', error);
+        alert('⚠️ ข้อผิดพลาดในการส่งไปยัง Google Sheets: ' + error.message + '\n\nแต่ CSV ถูกดาวน์โหลดเรียบร้อยแล้ว');
+      });
     }
   });
 
@@ -332,7 +333,6 @@
 
   // ========================================
   // ขั้นตอนที่ 3: แบบสอบถามเกี่ยวกับประสบการณ์การเรียนการออกเสียง
-  // คำถาม: "คุณเคยเรียนการออกเสียงแบบเป็นระบบหรือไม่"
   // ========================================
   const preSurveyChoice = {
     type: jsPsychSurveyMultiChoice,
@@ -349,12 +349,10 @@
 
   // ========================================
   // ขั้นตอนที่ 4: แบบสอบถามส่วนที่ 1
-  // คำถาม: ระยะเวลาการเรียนภาษาญี่ปุ่น / ระยะเวลาพำนักในญี่ปุ่น / อีเมล
   // ========================================
   const preSurveyForm = {
     type: jsPsychHtmlButtonResponse,
     stimulus: function() {
-      // สร้าง select options สำหรับปี 0-50 และเดือน (มี default 'กรุณาเลือก' เป็นตัวแรก)
       let yearOptions = '<option value="">กรุณาเลือก / 選択してください</option>';
       for (let i = 0; i <= 50; i++) { yearOptions += `<option value="${i}">${i} 年/ปี</option>`; }
       let monthOptions = '<option value="">กรุณาเลือก / 選択してください</option>';
@@ -424,7 +422,6 @@
 
   // ========================================
   // ขั้นตอนที่ 5: แบบสอบถามส่วนที่ 2 (แบบมีเงื่อนไข)
-  // คำถาม: "ชื่อสถาบันที่เรียนการออกเสียง" (ถ้าตอบ 'มี' ในขั้นตอนที่ 3)
   // ========================================
   const institutionTrial = {
     type: jsPsychSurveyText,
@@ -441,7 +438,6 @@
 
   // ========================================
   // ขั้นตอนที่ 6: คำแนะนำการทดลอง
-  // แสดงรายละเอียดของการทดลอง (44 ข้อ)
   // ========================================
   const instructions = {
     type: jsPsychHtmlButtonResponse,
@@ -454,34 +450,32 @@
         <p>แบบทดสอบมีทั้งหมด <strong>44 ข้อ</strong></p>
         <p>ในแต่ละข้อ จะมีเสียงเดียวเล่น และให้คุณเลือกคำตอบเดียวจากห้าตัวเลือก</p>
         <p>ระบบจะสุ่มลำดับตัวเลือกในแต่ละข้อ</p>
-        <p style="color: #ffcc00; margin-top: 15px;">ไม่มีการจำกัดเวลา ขอให้ท่านตอบตามเสียงที่ท่านได้ยินเป็นลำดับแรก</p>
+        <p style="color: #ffcc00; margin-top: 15px;"><strong>⏱️ โปรดทำข้อทดสอบให้เร็วที่สุด</strong> (ไม่มีเวลาจำกัด แต่ให้ตอบตามความเร็วธรรมชาติของคุณ)</p>
         
         <h3 style="color: #aaa; margin-top: 25px;">【日本語】</h3>
         <p>これは日本語音声聴覚調査です。</p>
         <p>調査は全部で <strong>44 問</strong>あります。</p>
         <p>各問題に1つの音声が再生され、5つの選択肢から1つの答えを選択してください。</p>
         <p>各問題で選択肢の順序はランダムに変更されます。</p>
-        <p style="color: #ffcc00; margin-top: 15px;">回答に時間制限はありません。直感的に一番初めに聞こえた音をお選びください。</p>
+        <p style="color: #ffcc00; margin-top: 15px;"><strong>⏱️ テストはできるだけ速く完了してください</strong>（時間制限はありませんが、自然なスピードでお答えください）</p>
       </div>
     `,
-    choices: ['เริ่มต้นการทดสอบ/調査開始'],
+    choices: ['เริ่มต้น / 開始'],
     button_html: '<button class="jspsych-btn" style="min-width: 150px; padding: 10px 20px; font-size: 16px;">%choice%</button>'
   };
-  // เพิ่มแบบสอบถามก่อนคำแนะนำ/การทดลอง (เรียงตามไฟล์แนบ)
-  timeline.push(titleAndNotice); // ชื่องานวิจัยและหมายเหตุ
+  timeline.push(titleAndNotice);
   
-  // ถ้าไม่ยินยอม ให้แสดงข้อความและสิ้นสุดการทดลอง
   const conditionalConsent = {
     timeline: [consentRefusal],
     conditional_function: function() {
       const last = jsPsych.data.get().last(1).values()[0];
-      return !last.consent; // ถ้าไม่ยินยอม ให้ show consentRefusal
+      return !last.consent;
     }
   };
   timeline.push(conditionalConsent);
   
-  timeline.push(preSurveyForm); // 学習期間 / 滞在期間 / email
-  timeline.push(preSurveyChoice); // 発音学習経験 (有/無)
+  timeline.push(preSurveyForm);
+  timeline.push(preSurveyChoice);
   const conditionalInstitution = {
     timeline: [institutionTrial],
     conditional_function: function() {
@@ -501,11 +495,6 @@
   // ========================================
   // ขั้นตอนที่ 7: ข้อมูลการทดลอง (ตัวอักษร 44 ข้อ)
   // ========================================
-  // 🔊 วิธีเพิ่มไฟล์เสียง:
-  // 1. สร้างโฟลเดอร์ "audio" ในโฟลเดอร์เดียวกับไฟล์ HTML นี้
-  // 2. ใส่ไฟล์เสียง (เช่น si.mp3, ti.mp3, hi.mp3 เป็นต้น) ลงในโฟลเดอร์ audio
-  // 3. แต่ละไฟล์ต้องตั้งชื่อตามตัวอักษร (stimulus) เช่น: し.mp3, ち.mp3, ひ.mp3 เป็นต้น
-  // 4. แล้วแทนที่ audioPlaceholder (ด้านล่าง) ด้วย audioPlayer trial (ดูเพิ่มเติมด้านล่าง)
   const trials = [
     { stimulus: 'し', choices: ['し (shi)', 'ち (chi)', 'ひ (hi)', 'き (ki)', '他(other)'], correct_response: 'し (shi)' },
     { stimulus: 'ち', choices: ['ち (chi)', 'し (shi)', 'じ (ji)', 'き (ki)', '他(other)'], correct_response: 'ち (chi)' },
@@ -560,13 +549,35 @@
     trial_duration: 500
   };
 
-  const audioPlaceholder = {
-    type: jsPsychHtmlButtonResponse,
+  // ========================================
+  // Trial ที่เล่นเสียงจริงจากโฟลเดอร์ audio/ (แทนที่ audioPlaceholder เดิม)
+  // ========================================
+  const audioTrial = {
+    type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-      return `<p>Placeholder สำหรับเสียง:</p><p style="font-size: 64px; margin: 24px 0;">${jsPsych.timelineVariable('stimulus')}</p>`;
+      const stim = jsPsych.timelineVariable('stimulus');
+      const filename = stimulusToRomaji[stim];
+      return `
+        <audio id="stim-audio" autoplay>
+          <source src="audio/${filename}.mp3" type="audio/mpeg">
+        </audio>
+        <div style="font-size: 64px; margin: 24px 0;">🔊</div>
+      `;
     },
-    choices: [],
-    trial_duration: 1000
+    choices: "NO_KEYS",
+    trial_duration: null,
+    on_load: function() {
+      const audioEl = document.getElementById('stim-audio');
+      if (audioEl) {
+        audioEl.onended = function() {
+          jsPsych.finishTrial();
+        };
+        audioEl.onerror = function() {
+          console.warn('Audio failed to load:', audioEl.currentSrc);
+          setTimeout(() => jsPsych.finishTrial(), 1000);
+        };
+      }
+    }
   };
 
   const responseTrial = {
@@ -599,7 +610,6 @@
       const choiceIndex = data.response;
       let selectedChoice = null;
       
-      // ดึง choice จาก shuffled_choices array โดยใช้ response index
       if (typeof choiceIndex === 'number' && data.shuffled_choices && data.shuffled_choices[choiceIndex]) {
         selectedChoice = data.shuffled_choices[choiceIndex];
       }
@@ -648,9 +658,9 @@
   };
 
   const trialProcedure = {
-    timeline: [fixation, audioPlaceholder, responseTrial, otherTextTimeline],
+    timeline: [fixation, audioTrial, responseTrial, otherTextTimeline],
     timeline_variables: trials,
-    randomize_order: true // สุ่มลำดับข้อคำถาม (44 ข้อ)
+    randomize_order: true
   };
   timeline.push(trialProcedure);
 
