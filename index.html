@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Test jsPsych Experiment</title>
+  <title>日本語音声聴覚識別調査 / การทดสอบการแยกแยะเสียงภาษาญี่ปุ่น</title>
   <script src="https://unpkg.com/jspsych@7.3.3"></script>
   <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.2"></script>
   <script src="https://unpkg.com/@jspsych/plugin-html-button-response@1.1.2"></script>
@@ -357,8 +357,8 @@
       let yearOptions = '<option value="">กรุณาเลือก / 選択してください</option>';
       for (let i = 0; i <= 50; i++) { yearOptions += `<option value="${i}">${i} 年/ปี</option>`; }
       let monthOptions = '<option value="">กรุณาเลือก / 選択してください</option>';
-      monthOptions += '<option value="uncertain_0_6">ไม่แน่ใจ (ประมาณ0-6เดือน) / 不確定（約0-6か月）</option>';
-      monthOptions += '<option value="uncertain_6_12">ไม่แน่ใจ (ประมาณ6-12เดือน) / 不確定（約6-12か月）</option>';
+      monthOptions += '<option value="3">ไม่แน่ใจ (ประมาณ0-6เดือน) / 不確定(約0-6か月)</option>';
+      monthOptions += '<option value="9">ไม่แน่ใจ (ประมาณ6-12เดือน) / 不確定(約6-12か月)</option>';
       for (let m = 1; m <= 12; m++) { monthOptions += `<option value="${m}">${m} ヶ月/เดือน</option>`; }
 
       return `
@@ -379,7 +379,7 @@
 
           <label><strong>今後の連絡のため、メールアドレスをご記入ください。</strong></label>
           <div style="margin-top:6px;color:#ccc;font-size:0.9em">กรุณากรอกอีเมล (@ และ . ถูกใส่ไว้ให้แล้ว)<br>
-          必須ではありません。このメールアドレスの個人情報は、研究が完了するまで（3年以内）安全ななデータベースに保管され、緊急の連絡の場合のみに使用されます。<br>
+          必須ではありません。このメールアドレスの個人情報は、研究が完了するまで (3年以内) 安全ななデータベースに保管され、緊急の連絡の場合のみに使用されます。<br>
           ไม่จำเป็นต้องใส่ ข้อมูลส่วนตัวในช่องอีเมลนี้จะถูกเก็บไว้จนกว่างานวิจัยจะเสร็จสมบูรณ์ (ไม่เกิน 3 ปี) ใน database ที่ปลอดภัย และจะใช้สำหรับการติดต่อกลับในกรณีฉุกเฉินเท่านั้น</div>
           <div style="margin:12px auto; display:flex; gap:4px; align-items:center; justify-content:center; flex-wrap:wrap; max-width:500px;">
             <input id="email_user" type="text" placeholder="email" style="width:120px; background:#111; color:#fff; border:1px solid #444; padding:6px; font-size:0.95em;" />
@@ -447,20 +447,26 @@
         <h2 style="text-align: center;">ยินดีต้อนรับ / ようこそ</h2>
         
         <h3 style="color: #aaa; margin-top: 25px;">【ไทย】</h3>
-        <p>นี่คือการทดสอบการแยกแยะเสียง</p>
-        <p>แบบทดสอบมีทั้งหมด <strong>44 ข้อ</strong></p>
-        <p>ในแต่ละข้อ จะมีเสียงเดียวเล่น และให้คุณเลือกคำตอบเดียวจากห้าตัวเลือก</p>
-        <p>ก่อนเริ่มจริง จะมี <strong>2 ข้อทดลอง</strong> ซึ่งไม่คิดคะแนน แต่ให้ตอบเหมือนข้อจริง</p>
-        <p>ระบบจะสุ่มลำดับตัวเลือกในแต่ละข้อ</p>
-        <p style="color: #ffcc00; margin-top: 15px;"><strong>⏱️ โปรดทำข้อทดสอบให้เร็วที่สุด</strong> (ไม่มีเวลาจำกัด แต่ให้ตอบตามความเร็วธรรมชาติของคุณ)</p>
+        <p>การทดสอบนี้เป็นแบบทดสอบการแยกแยะเสียงภาษาญี่ปุ่น จำนวนข้อทั้งหมด <strong>44 ข้อ</strong></p>
+        <p>ในแต่ละข้อ จะมีเสียงเล่นให้ฟังหนึ่งครั้ง แล้วให้เลือกคำตอบที่ตรงกับเสียงนั้นจากห้าตัวเลือก</p>
+        <p>ก่อนเริ่มการทดสอบจริง จะมีคำถามตัวอย่าง (demo) <strong>2 ข้อ</strong> เพื่อให้คุ้นเคยกับรูปแบบ โดยข้อทดลองเหล่านี้ไม่ถูกนำไปคำนวณคะแนน</p>
+        <p>ระบบจะสุ่มลำดับตัวเลือกในแต่ละข้อโดยอัตโนมัติ</p>
+        <p style="background: rgba(255,204,0,0.1); border-left: 3px solid #ffcc00; padding: 10px 14px; margin-top: 12px;">
+          <strong>📌 ข้อสำคัญ:</strong> ท่านสามารถเลือกคำตอบเดียวกันซ้ำในหลายข้อได้ หากได้ยินเสียงที่เหมือนกัน<br>
+          <span style="color: #ccc; font-size: 0.92em;">เช่น หากได้ยิน sha ในข้อที่ 1 และฟังแล้วรู้สึกว่าข้อที่ 2 ก็เป็น sha เช่นกัน สามารถเลือก sha ซ้ำได้</span>
+        </p>
+        <p style="color: #ffcc00; margin-top: 15px;"><strong>⏱️ โปรดตอบให้เร็วที่สุดตามธรรมชาติ</strong> โดยไม่จำเป็นต้องคิดนาน เพื่อให้ได้ผลลัพธ์ที่แม่นยำที่สุด (ไม่มีการจำกัดเวลา)</p>
         
         <h3 style="color: #aaa; margin-top: 25px;">【日本語】</h3>
-        <p>これは日本語音声聴覚調査です。</p>
-        <p>調査は全部で <strong>44 問</strong>あります。</p>
-        <p>本番の前に、<strong>2 問の練習問題</strong>があります。練習問題は採点に含まれませんが、本番と同じように回答してください。</p>
-        <p>各問題に1つの音声が再生され、5つの選択肢から1つの答えを選択してください。</p>
-        <p>各問題で選択肢の順序はランダムに変更されます。</p>
-        <p style="color: #ffcc00; margin-top: 15px;"><strong>⏱️ テストはできるだけ速く完了してください</strong>（時間制限はありませんが、自然なスピードでお答えください）</p>
+        <p>本調査は日本語音声の聴覚識別テストです。全部で <strong>44 問</strong>あります。</p>
+        <p>各問題では音声が1回再生されます。聞こえた音に最も近い選択肢を5つの中から1つ選んでください。</p>
+        <p>本番開始前に <strong>2 問の練習問題</strong>があります。練習問題は採点に含まれませんが、本番と同じ要領で回答してください。</p>
+        <p>各問題における選択肢の順序は、毎回ランダムに入れ替わります。</p>
+        <p style="background: rgba(255,204,0,0.1); border-left: 3px solid #ffcc00; padding: 10px 14px; margin-top: 12px;">
+          <strong>📌 重要:</strong> 複数の問題で同じ選択肢を繰り返し選択することができます。<br>
+          <span style="color: #ccc; font-size: 0.92em;">例えば、問1で「sha」と答えた場合でも、問2でも「sha」に聞こえた場合は、同じく「sha」を選んでいただいても構いません。</span>
+        </p>
+        <p style="color: #ffcc00; margin-top: 15px;"><strong>⏱️ なるべく自然なスピードで、直感的にお答えください</strong>（時間制限はありません）</p>
       </div>
     `,
     choices: ['เริ่มต้น / 開始'],
@@ -590,7 +596,7 @@
 
   const responseTrial = {
     type: jsPsychHtmlButtonResponse,
-    stimulus: '<p>เลือกคำตอบที่ตรงกับเสียงที่ได้ยิน</p>',
+    stimulus: '<p style="font-size:16px;">กรุณาเลือกคำตอบที่ตรงกับเสียงที่ท่านได้ยิน<br><span style="color:#aaa; font-size:14px;">聞こえた音に最も近い選択肢を選んでください</span></p>',
     choices: jsPsych.timelineVariable('choices'),
     button_html: '<button class="jspsych-btn" style="min-width: 120px; margin: 8px;">%choice%</button>',
     data: {
@@ -674,11 +680,12 @@
         <h2 style="text-align: center;">ข้อทดลองก่อนเริ่มจริง /練習問題</h2>
         <p>ก่อนเริ่มการทดสอบจริง จะมี <strong>2 ข้อทดลอง</strong> เพื่อให้คุณคุ้นเคยกับรูปแบบข้อสอบ</p>
         <p>ข้อทดลองทั้งสองข้อ <strong>จะไม่ถูกบันทึกในผลลัพธ์</strong> แต่ให้ตอบเหมือนข้อจริง</p>
-        <p>準備ができましたら、次の 2 問の練習問題に進んでください。</p>
+        <p>เมื่อพร้อมแล้ว กรุณากดปุ่มด้านล่างเพื่อเริ่มต้น</p>
         <hr style="margin: 18px 0; border-color: rgba(255,255,255,0.2);"/>
-        <h3 style="color: #aaa;">日本語</h3>
+        <h3 style="color: #aaa;">【日本語】</h3>
         <p>本番のテストの前に、<strong>2 問の練習問題</strong>があります。</p>
-        <p>練習問題の回答は結果に保存されませんが、本番と同じ形式で回答してください。</p>
+        <p>練習問題の回答は採点・記録に含まれませんが、本番と同じ要領で回答してください。</p>
+        <p>準備ができましたら、下のボタンを押して練習を開始してください。</p>
       </div>
     `,
     choices: ['เริ่มข้อทดลอง / 練習問題を始める'],
