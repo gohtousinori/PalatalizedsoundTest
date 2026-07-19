@@ -359,6 +359,7 @@
       let monthOptions = '<option value="">กรุณาเลือก / 選択してください</option>';
       monthOptions += '<option value="3">ไม่แน่ใจ (ประมาณ0-6เดือน) / 不確定(約0-6か月)</option>';
       monthOptions += '<option value="9">ไม่แน่ใจ (ประมาณ6-12เดือน) / 不確定(約6-12か月)</option>';
+      monthOptions += '<option value="0">0 ヶ月/เดือน</option>';
       for (let m = 1; m <= 12; m++) { monthOptions += `<option value="${m}">${m} ヶ月/เดือน</option>`; }
 
       return `
